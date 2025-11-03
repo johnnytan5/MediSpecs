@@ -10,10 +10,12 @@ import {
   Brain,
   User,
 } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 
 const BottomNav = () => {
   const pathname = usePathname();
   const router = useRouter();
+  const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
 
   const tabs = [
@@ -53,7 +55,7 @@ const BottomNav = () => {
                   className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
                     isActive
                       ? 'text-blue-600 bg-blue-50'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                      : 'text-gray-800 hover:text-gray-900 hover:bg-gray-50'
                   }`}
                 >
                   <Icon size={18} />
@@ -61,6 +63,12 @@ const BottomNav = () => {
                 </button>
               );
             })}
+            <button
+              onClick={() => logout().then(() => router.push('/auth'))}
+              className="ml-2 inline-flex items-center px-3 py-2 rounded-lg text-sm text-gray-700 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100"
+            >
+              Logout
+            </button>
           </div>
         </div>
       </div>

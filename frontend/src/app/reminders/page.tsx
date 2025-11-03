@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2, X } from 'lucide-react';
+import { Plus, Trash2, X, Pencil } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { fetchJson } from '@/lib/api';
 
 type RepeatType = 'daily' | 'weekly';
 
@@ -17,35 +19,43 @@ type Reminder = {
   createdAt: string;
 };
 
-const STORAGE_KEY = 'medispecs.reminders';
-
-function loadReminders(): Reminder[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed as Reminder[];
-  } catch {
-    return [];
-  }
-}
-
-function saveReminders(reminders: Reminder[]) {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(reminders));
-}
-
-function generateId() {
-  return Math.random().toString(36).slice(2) + Date.now().toString(36);
-}
+type ApiReminder = {
+  PK?: string;
+  SK?: string;
+  reminderId?: string;
+  title: string;
+  scheduleType: 'daily' | 'weekly';
+  timeOfDay?: string;
+  daysOfWeek?: number[];
+  deviceId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
 
 const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+function mapApiReminderToReminder(api: ApiReminder): Reminder {
+  const reminderId = api.reminderId || (api.SK ? api.SK.split('REMINDER#')[1] : '');
+  return {
+    id: reminderId,
+    title: api.title,
+    time: api.timeOfDay || '',
+    repeat: {
+      type: api.scheduleType,
+      daysOfWeek: api.daysOfWeek || (api.scheduleType === 'weekly' ? [] : undefined),
+    },
+    notes: api.deviceId || undefined, // Using deviceId as notes for now, adjust if needed
+    createdAt: api.createdAt || new Date().toISOString(),
+  };
+}
+
 export default function RemindersPage() {
+  const { token, user } = useAuth();
   const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Form state
   const [title, setTitle] = useState('');
@@ -55,12 +65,24 @@ export default function RemindersPage() {
   const [notes, setNotes] = useState('');
 
   useEffect(() => {
-    setReminders(loadReminders());
-  }, []);
-
-  useEffect(() => {
-    saveReminders(reminders);
-  }, [reminders]);
+    if (!token || !user?.userId) return;
+    const userId = user.userId;
+    const authToken = token;
+    async function loadReminders() {
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await fetchJson<ApiReminder[]>(`/reminders?userId=${userId}`, { method: 'GET' }, authToken || undefined);
+        const mapped = (Array.isArray(data) ? data : []).map(mapApiReminderToReminder);
+        setReminders(mapped);
+      } catch (e: any) {
+        setError(e?.message || 'Failed to load reminders');
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadReminders();
+  }, [token, user?.userId]);
 
   const sortedReminders = useMemo(() => {
     return [...reminders].sort((a, b) => a.time.localeCompare(b.time));
@@ -77,6 +99,7 @@ export default function RemindersPage() {
   function openForm() {
     resetForm();
     setIsOpen(true);
+    setEditingId(null);
   }
 
   function toggleDay(dayIndex: number) {
@@ -87,26 +110,62 @@ export default function RemindersPage() {
     );
   }
 
-  function addReminder(e: React.FormEvent) {
+  async function addReminder(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim() || !time) return;
     if (repeatType === 'weekly' && selectedDays.length === 0) return;
+    if (!token || !user?.userId) return;
 
-    const newReminder: Reminder = {
-      id: generateId(),
-      title: title.trim(),
-      time,
-      repeat: repeatType === 'daily' ? { type: 'daily' } : { type: 'weekly', daysOfWeek: selectedDays },
-      notes: notes.trim() || undefined,
-      createdAt: new Date().toISOString(),
-    };
-
-    setReminders(prev => [newReminder, ...prev]);
-    setIsOpen(false);
+    try {
+      setError(null);
+      const payload = {
+        userId: user.userId,
+        title: title.trim(),
+        scheduleType: repeatType,
+        timeOfDay: time,
+        daysOfWeek: repeatType === 'weekly' ? selectedDays : [],
+        deviceId: notes.trim() || undefined,
+      };
+      const authToken = token || undefined;
+      if (editingId) {
+        // PATCH existing
+        const patched = await fetchJson<ApiReminder>(`/reminders/${editingId}`, { method: 'PATCH', body: JSON.stringify(payload) }, authToken);
+        const mapped = mapApiReminderToReminder(patched);
+        setReminders(prev => prev.map(r => r.id === editingId ? mapped : r));
+      } else {
+        // POST new
+        const apiReminder = await fetchJson<ApiReminder>(`/reminders`, { method: 'POST', body: JSON.stringify(payload) }, authToken);
+        const mapped = mapApiReminderToReminder(apiReminder);
+        setReminders(prev => [mapped, ...prev]);
+      }
+      setIsOpen(false);
+      resetForm();
+      setEditingId(null);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to create reminder');
+    }
   }
 
-  function deleteReminder(id: string) {
-    setReminders(prev => prev.filter(r => r.id !== id));
+  async function deleteReminder(id: string) {
+    if (!token || !user?.userId) return;
+    try {
+      setError(null);
+      const authToken = token || undefined;
+      await fetchJson(`/reminders/${id}`, { method: 'DELETE' }, authToken);
+      setReminders(prev => prev.filter(r => r.id !== id));
+    } catch (e: any) {
+      setError(e?.message || 'Failed to delete reminder');
+    }
+  }
+
+  function openEdit(rem: Reminder) {
+    setEditingId(rem.id);
+    setTitle(rem.title);
+    setTime(rem.time);
+    setRepeatType(rem.repeat.type);
+    setSelectedDays(rem.repeat.type === 'weekly' ? (rem.repeat.daysOfWeek || []) : []);
+    setNotes(rem.notes || '');
+    setIsOpen(true);
   }
 
   return (
@@ -117,7 +176,17 @@ export default function RemindersPage() {
           <p className="text-sm text-gray-500 mt-1">Keep things on time with a simple schedule.</p>
         </div>
 
-        {sortedReminders.length === 0 ? (
+        {error && (
+          <div className="mb-4 p-3 rounded-lg border border-red-200 bg-red-50 text-red-700 text-sm">
+            {error}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="text-center text-gray-500 mt-20">
+            <p className="text-base">Loading reminders…</p>
+          </div>
+        ) : sortedReminders.length === 0 ? (
           <div className="text-center text-gray-500 mt-20">
             <p className="text-base">No reminders yet</p>
             <p className="text-sm mt-1">Tap + to create your first reminder</p>
@@ -127,7 +196,8 @@ export default function RemindersPage() {
             {sortedReminders.map((r) => (
               <li
                 key={r.id}
-                className="group flex items-center justify-between p-4 rounded-2xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow"
+                className="group flex items-center justify-between p-4 rounded-2xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                onClick={() => openEdit(r)}
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
@@ -141,13 +211,22 @@ export default function RemindersPage() {
                   </p>
                   {r.notes && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{r.notes}</p>}
                 </div>
-                <button
+                <div className="ml-4 flex items-center gap-1">
+                  <button
+                    className="text-gray-400 hover:text-blue-700 p-2 rounded-xl hover:bg-blue-50 border border-transparent hover:border-blue-100 transition-colors"
+                    onClick={(e) => { e.stopPropagation(); openEdit(r); }}
+                    aria-label="Edit reminder"
+                  >
+                    <Pencil size={18} />
+                  </button>
+                  <button
                   className="ml-4 text-gray-400 hover:text-red-600 p-2 rounded-xl hover:bg-red-50 border border-transparent hover:border-red-100 transition-colors"
                   onClick={() => deleteReminder(r.id)}
                   aria-label="Delete reminder"
                 >
                   <Trash2 size={18} />
-                </button>
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
@@ -208,14 +287,14 @@ export default function RemindersPage() {
                 <div className="inline-flex p-1 rounded-xl border border-gray-200 bg-gray-50">
                   <button
                     type="button"
-                    className={`px-3 py-2 rounded-lg text-sm transition ${repeatType === 'daily' ? 'bg-white shadow-sm border border-gray-200' : 'text-gray-600'}`}
+                    className={`px-3 py-2 rounded-lg text-sm transition ${repeatType === 'daily' ? 'bg-blue-600 text-white border border-blue-600 shadow' : 'text-gray-900 hover:text-gray-950'}`}
                     onClick={() => setRepeatType('daily')}
                   >
                     Daily
                   </button>
                   <button
                     type="button"
-                    className={`ml-1 px-3 py-2 rounded-lg text-sm transition ${repeatType === 'weekly' ? 'bg-white shadow-sm border border-gray-200' : 'text-gray-600'}`}
+                    className={`ml-1 px-3 py-2 rounded-lg text-sm transition ${repeatType === 'weekly' ? 'bg-blue-600 text-white border border-blue-600 shadow' : 'text-gray-900 hover:text-gray-950'}`}
                     onClick={() => setRepeatType('weekly')}
                   >
                     Weekly
