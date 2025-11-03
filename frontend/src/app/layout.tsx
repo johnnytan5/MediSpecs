@@ -29,10 +29,12 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <div className="min-h-screen bg-gray-50">
-          <main className="pb-20">
-            {children}
-          </main>
           <BottomNav />
+          <main className="pt-16">
+            <div className="max-w-6xl mx-auto px-4">
+              {children}
+            </div>
+          </main>
         </div>
       </body>
     </html>

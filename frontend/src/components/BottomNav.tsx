@@ -4,9 +4,11 @@ import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
   MessageCircle, 
-  Camera, 
-  Calendar, 
-  User 
+  Bell, 
+  MapPin, 
+  Video, 
+  Brain,
+  User,
 } from 'lucide-react';
 
 const BottomNav = () => {
@@ -16,9 +18,11 @@ const BottomNav = () => {
 
   const tabs = [
     { id: 0, name: 'Chat', icon: MessageCircle, path: '/' },
-    { id: 1, name: 'Scan', icon: Camera, path: '/scan' },
-    { id: 2, name: 'Calendar', icon: Calendar, path: '/calendar' },
-    { id: 3, name: 'Profile', icon: User, path: '/profile' },
+    { id: 1, name: 'Reminders', icon: Bell, path: '/reminders' },
+    { id: 2, name: 'Location', icon: MapPin, path: '/location' },
+    { id: 3, name: 'Videos', icon: Video, path: '/videos' },
+    { id: 4, name: 'Cognitive', icon: Brain, path: '/cognitive' },
+    { id: 5, name: 'Profile', icon: User, path: '/profile' },
   ];
 
   useEffect(() => {
@@ -34,25 +38,31 @@ const BottomNav = () => {
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-2 z-50">
-      <div className="flex justify-around items-center max-w-md mx-auto">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => handleTabClick(tab)}
-              className={`flex flex-col items-center py-2 px-3 rounded-lg transition-colors ${
-                activeTab === tab.id
-                  ? 'text-blue-600 bg-blue-50'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <Icon size={24} />
-              <span className="text-xs mt-1 font-medium">{tab.name}</span>
-            </button>
-          );
-        })}
+    <nav className="fixed top-0 left-0 right-0 bg-white/95 backdrop-blur border-b border-gray-200 z-50">
+      <div className="max-w-6xl mx-auto px-4">
+        <div className="h-14 flex items-center justify-between">
+          <div className="text-base font-semibold text-gray-900">MediSpecs</div>
+          <div className="flex items-center gap-1 sm:gap-2">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => handleTabClick(tab)}
+                  className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
+                    isActive
+                      ? 'text-blue-600 bg-blue-50'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  <Icon size={18} />
+                  <span className="hidden sm:inline font-medium">{tab.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </nav>
   );
