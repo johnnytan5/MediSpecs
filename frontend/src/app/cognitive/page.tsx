@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2, X } from 'lucide-react';
+import { Plus, Trash2, X, Pencil } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { fetchJson } from '@/lib/api';
 
 type CognitiveItem = {
   id: string;
@@ -9,41 +11,54 @@ type CognitiveItem = {
   createdAt: string;
 };
 
-const STORAGE_KEY = 'medispecs.cognitive';
+type ApiCognitiveItem = {
+  PK?: string;
+  SK?: string;
+  exerciseId?: string;
+  question: string;
+  category?: string;
+  difficulty?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
 
-function loadItems(): CognitiveItem[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as CognitiveItem[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveItems(items: CognitiveItem[]) {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-}
-
-function generateId() {
-  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+function mapApiToItem(api: ApiCognitiveItem): CognitiveItem {
+  const exerciseId = api.exerciseId || (api.SK ? api.SK.split('COG#')[1] : '');
+  return {
+    id: exerciseId,
+    question: api.question,
+    createdAt: api.createdAt || new Date().toISOString(),
+  };
 }
 
 export default function CognitivePage() {
+  const { token, user } = useAuth();
   const [items, setItems] = useState<CognitiveItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [question, setQuestion] = useState('');
 
   useEffect(() => {
-    setItems(loadItems());
-  }, []);
-
-  useEffect(() => {
-    saveItems(items);
-  }, [items]);
+    if (!token || !user?.userId) return;
+    const userId = user.userId;
+    const authToken = token;
+    async function loadItems() {
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await fetchJson<ApiCognitiveItem[]>(`/cognitive?userId=${userId}`, { method: 'GET' }, authToken || undefined);
+        const mapped = (Array.isArray(data) ? data : []).map(mapApiToItem);
+        setItems(mapped);
+      } catch (e: any) {
+        setError(e?.message || 'Failed to load exercises');
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadItems();
+  }, [token, user?.userId]);
 
   const sorted = useMemo(() => {
     return [...items].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -51,23 +66,57 @@ export default function CognitivePage() {
 
   function openForm() {
     setQuestion('');
+    setEditingId(null);
     setIsOpen(true);
   }
 
-  function addItem(e: React.FormEvent) {
-    e.preventDefault();
-    if (!question.trim()) return;
-    const newItem: CognitiveItem = {
-      id: generateId(),
-      question: question.trim(),
-      createdAt: new Date().toISOString(),
-    };
-    setItems(prev => [newItem, ...prev]);
-    setIsOpen(false);
+  function openEdit(item: CognitiveItem) {
+    setEditingId(item.id);
+    setQuestion(item.question);
+    setIsOpen(true);
   }
 
-  function deleteItem(id: string) {
-    setItems(prev => prev.filter(i => i.id !== id));
+  async function addItem(e: React.FormEvent) {
+    e.preventDefault();
+    if (!question.trim()) return;
+    if (!token || !user?.userId) return;
+
+    try {
+      setError(null);
+      const payload = {
+        userId: user.userId,
+        question: question.trim(),
+      };
+      const authToken = token || undefined;
+      if (editingId) {
+        // PATCH existing
+        const patched = await fetchJson<ApiCognitiveItem>(`/cognitive/${editingId}`, { method: 'PATCH', body: JSON.stringify(payload) }, authToken);
+        const mapped = mapApiToItem(patched);
+        setItems(prev => prev.map(i => i.id === editingId ? mapped : i));
+      } else {
+        // POST new
+        const apiItem = await fetchJson<ApiCognitiveItem>(`/cognitive`, { method: 'POST', body: JSON.stringify(payload) }, authToken);
+        const mapped = mapApiToItem(apiItem);
+        setItems(prev => [mapped, ...prev]);
+      }
+      setIsOpen(false);
+      setQuestion('');
+      setEditingId(null);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to save exercise');
+    }
+  }
+
+  async function deleteItem(id: string) {
+    if (!token || !user?.userId) return;
+    try {
+      setError(null);
+      const authToken = token || undefined;
+      await fetchJson(`/cognitive/${id}`, { method: 'DELETE' }, authToken);
+      setItems(prev => prev.filter(i => i.id !== id));
+    } catch (e: any) {
+      setError(e?.message || 'Failed to delete exercise');
+    }
   }
 
   return (
@@ -78,7 +127,17 @@ export default function CognitivePage() {
           <p className="text-sm text-gray-500 mt-1">Create simple Q&A prompts for practice.</p>
         </div>
 
-        {sorted.length === 0 ? (
+        {error && (
+          <div className="mb-4 p-3 rounded-lg border border-red-200 bg-red-50 text-red-700 text-sm">
+            {error}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="text-center text-gray-500 mt-20">
+            <p className="text-base">Loading exercises…</p>
+          </div>
+        ) : sorted.length === 0 ? (
           <div className="text-center text-gray-500 mt-20">
             <p className="text-base">No exercises yet</p>
             <p className="text-sm mt-1">Tap + to add a question</p>
@@ -91,13 +150,22 @@ export default function CognitivePage() {
                   <p className="font-medium text-gray-900 truncate">{item.question}</p>
                   <p className="text-xs text-gray-500 mt-0.5">Added {new Date(item.createdAt).toLocaleString()}</p>
                 </div>
-                <button
-                  className="ml-4 text-gray-400 hover:text-red-600 p-2 rounded-xl hover:bg-red-50 border border-transparent hover:border-red-100 transition-colors"
-                  onClick={() => deleteItem(item.id)}
-                  aria-label="Delete exercise"
-                >
-                  <Trash2 size={18} />
-                </button>
+                <div className="ml-4 flex items-center gap-1">
+                  <button
+                    className="text-gray-400 hover:text-blue-700 p-2 rounded-xl hover:bg-blue-50 border border-transparent hover:border-blue-100 transition-colors"
+                    onClick={() => openEdit(item)}
+                    aria-label="Edit exercise"
+                  >
+                    <Pencil size={18} />
+                  </button>
+                  <button
+                    className="text-gray-400 hover:text-red-600 p-2 rounded-xl hover:bg-red-50 border border-transparent hover:border-red-100 transition-colors"
+                    onClick={() => deleteItem(item.id)}
+                    aria-label="Delete exercise"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
@@ -119,12 +187,12 @@ export default function CognitivePage() {
           <div className="w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">Add Exercise</h2>
+                <h2 className="text-lg font-semibold text-gray-900">{editingId ? 'Edit Exercise' : 'Add Exercise'}</h2>
                 <p className="text-xs text-gray-500">Enter a question for practice.</p>
               </div>
               <button
                 className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100"
-                onClick={() => setIsOpen(false)}
+                onClick={() => { setIsOpen(false); setEditingId(null); setQuestion(''); }}
                 aria-label="Close"
               >
                 <X size={18} />
@@ -145,8 +213,8 @@ export default function CognitivePage() {
               </div>
 
               <div className="flex gap-2 justify-end pt-1">
-                <button type="button" className="px-4 py-2 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50" onClick={() => setIsOpen(false)}>Cancel</button>
-                <button type="submit" className="px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 shadow-sm">Save</button>
+                <button type="button" className="px-4 py-2 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50" onClick={() => { setIsOpen(false); setEditingId(null); setQuestion(''); }}>Cancel</button>
+                <button type="submit" className="px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 shadow-sm">{editingId ? 'Update' : 'Save'}</button>
               </div>
             </form>
           </div>

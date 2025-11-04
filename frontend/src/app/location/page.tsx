@@ -1,8 +1,18 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useAuth } from '@/context/AuthContext';
+import { fetchJson } from '@/lib/api';
 
 type LatLng = { lat: number; lng: number; timestamp?: string };
+
+type ApiLocation = {
+  lat: number;
+  lng: number;
+  timestamp?: string;
+  accuracy?: number;
+  speed?: number;
+};
 
 function loadGoogleMaps(apiKey: string): Promise<typeof google> {
   return new Promise((resolve, reject) => {
@@ -48,7 +58,15 @@ function generateCirclePoints(center: LatLng, radiusMeters: number, numPoints: n
   return points;
 }
 
+function formatDateForAPI(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}${m}${d}`;
+}
+
 export default function LocationPage() {
+  const { token } = useAuth();
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY as string | undefined;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -57,15 +75,24 @@ export default function LocationPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [points, setPoints] = useState<LatLng[]>([]);
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    const today = new Date();
+    return today.toISOString().split('T')[0]; // YYYY-MM-DD format
+  });
+  const deviceId = 'd_123'; // Hardcoded for now
 
   useEffect(() => {
-    async function init() {
+    async function fetchLocations() {
+      if (!token || !deviceId) return;
       try {
-        // Fetch points once on mount
-        // Replace URL with your backend endpoint
-        const res = await fetch('/api/locations');
-        if (!res.ok) throw new Error('Failed to fetch locations');
-        const data: LatLng[] = await res.json();
+        setLoading(true);
+        setError(null);
+        const dateStr = formatDateForAPI(new Date(selectedDate));
+        const data = await fetchJson<ApiLocation[]>(
+          `/locations?deviceId=${deviceId}&date=${dateStr}`,
+          { method: 'GET' },
+          token || undefined
+        );
         const valid = Array.isArray(data) ? data.filter(p => typeof p.lat === 'number' && typeof p.lng === 'number') : [];
         if (valid.length > 0) {
           setPoints(valid);
@@ -76,7 +103,7 @@ export default function LocationPage() {
           setPoints(circle);
         }
       } catch (e: any) {
-        // On error, also show the demo circle so the page remains useful
+        // On error, show demo circle
         const umCenter = { lat: 3.1199, lng: 101.6544 };
         const circle = generateCirclePoints(umCenter, 300, 90);
         setPoints(circle);
@@ -85,10 +112,13 @@ export default function LocationPage() {
         setLoading(false);
       }
     }
-    init();
-  }, []);
+    fetchLocations();
+  }, [selectedDate, token, deviceId]);
 
   useEffect(() => {
+    // Don't render map while loading
+    if (loading) return;
+
     async function render() {
       if (!apiKey) return;
       if (!containerRef.current) return;
@@ -141,13 +171,24 @@ export default function LocationPage() {
       map.fitBounds(bounds);
     }
     render();
-  }, [apiKey, points]);
+  }, [apiKey, points, loading]);
 
   return (
     <div className="pb-6">
       <div className="mb-4">
         <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Location</h1>
-        <p className="text-sm text-gray-500 mt-1">Latest path is shown when you open this tab.</p>
+        <p className="text-sm text-gray-500 mt-1">View movement path by selecting a date.</p>
+      </div>
+
+      {/* Date selector - more prominent */}
+      <div className="mb-4 p-4 bg-white border border-gray-200 rounded-xl shadow-sm">
+        <label className="block text-sm font-semibold mb-2 text-gray-900">Select Date</label>
+        <input
+          type="date"
+          value={selectedDate}
+          onChange={(e) => setSelectedDate(e.target.value)}
+          className="w-full sm:w-auto min-w-[200px] border-2 border-gray-300 rounded-xl px-4 py-3 bg-white text-gray-900 text-base font-medium focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-600 transition shadow-sm"
+        />
       </div>
 
       {error && (
@@ -156,11 +197,16 @@ export default function LocationPage() {
         </div>
       )}
 
-      <div ref={containerRef} className="w-full h-[60vh] rounded-2xl border border-gray-200 bg-white overflow-hidden" />
-
-      {loading && (
-        <div className="mt-3 text-sm text-gray-500">Loading map…</div>
-      )}
+      <div ref={containerRef} className="w-full h-[60vh] rounded-2xl border border-gray-200 bg-white overflow-hidden relative">
+        {loading && (
+          <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center z-10">
+            <div className="text-center">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-600 border-t-transparent mb-2"></div>
+              <p className="text-sm text-gray-700 font-medium">Loading locations…</p>
+            </div>
+          </div>
+        )}
+      </div>
 
       {!apiKey && (
         <div className="mt-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
