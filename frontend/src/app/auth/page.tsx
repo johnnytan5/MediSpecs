@@ -25,8 +25,8 @@ export default function AuthPage() {
         await register(name, email, password);
       }
       router.push('/');
-    } catch (err: any) {
-      setError(err?.message || 'Failed');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed');
     } finally {
       setLoading(false);
     }

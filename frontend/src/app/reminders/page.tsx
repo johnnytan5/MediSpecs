@@ -75,8 +75,8 @@ export default function RemindersPage() {
         const data = await fetchJson<ApiReminder[]>(`/reminders?userId=${userId}`, { method: 'GET' }, authToken || undefined);
         const mapped = (Array.isArray(data) ? data : []).map(mapApiReminderToReminder);
         setReminders(mapped);
-      } catch (e: any) {
-        setError(e?.message || 'Failed to load reminders');
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load reminders');
       } finally {
         setLoading(false);
       }
@@ -141,8 +141,8 @@ export default function RemindersPage() {
       setIsOpen(false);
       resetForm();
       setEditingId(null);
-    } catch (e: any) {
-      setError(e?.message || 'Failed to create reminder');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to create reminder');
     }
   }
 
@@ -153,8 +153,8 @@ export default function RemindersPage() {
       const authToken = token || undefined;
       await fetchJson(`/reminders/${id}`, { method: 'DELETE' }, authToken);
       setReminders(prev => prev.filter(r => r.id !== id));
-    } catch (e: any) {
-      setError(e?.message || 'Failed to delete reminder');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete reminder');
     }
   }
 

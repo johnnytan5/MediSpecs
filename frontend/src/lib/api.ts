@@ -7,9 +7,9 @@ export function getApiBase(): string {
 
 export async function fetchJson<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
   const base = getApiBase();
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(options.headers || {}),
+    ...(options.headers as Record<string, string> || {}),
   };
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(`${base}${path}`, { ...options, headers });

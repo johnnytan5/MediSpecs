@@ -51,8 +51,8 @@ export default function CognitivePage() {
         const data = await fetchJson<ApiCognitiveItem[]>(`/cognitive?userId=${userId}`, { method: 'GET' }, authToken || undefined);
         const mapped = (Array.isArray(data) ? data : []).map(mapApiToItem);
         setItems(mapped);
-      } catch (e: any) {
-        setError(e?.message || 'Failed to load exercises');
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load exercises');
       } finally {
         setLoading(false);
       }
@@ -102,8 +102,8 @@ export default function CognitivePage() {
       setIsOpen(false);
       setQuestion('');
       setEditingId(null);
-    } catch (e: any) {
-      setError(e?.message || 'Failed to save exercise');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save exercise');
     }
   }
 
@@ -114,8 +114,8 @@ export default function CognitivePage() {
       const authToken = token || undefined;
       await fetchJson(`/cognitive/${id}`, { method: 'DELETE' }, authToken);
       setItems(prev => prev.filter(i => i.id !== id));
-    } catch (e: any) {
-      setError(e?.message || 'Failed to delete exercise');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete exercise');
     }
   }
 

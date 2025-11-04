@@ -21,13 +21,13 @@ function loadGoogleMaps(apiKey: string): Promise<typeof google> {
       return;
     }
     // Already loaded
-    if ((window as any).google && (window as any).google.maps) {
-      resolve((window as any).google);
+    if ((window as unknown as { google?: typeof google }).google?.maps) {
+      resolve((window as unknown as { google: typeof google }).google);
       return;
     }
     const existing = document.getElementById('google-maps-js');
     if (existing) {
-      (existing as HTMLScriptElement).addEventListener('load', () => resolve((window as any).google));
+      (existing as HTMLScriptElement).addEventListener('load', () => resolve((window as unknown as { google: typeof google }).google));
       (existing as HTMLScriptElement).addEventListener('error', () => reject(new Error('Failed to load Google Maps script')));
       return;
     }
@@ -36,7 +36,7 @@ function loadGoogleMaps(apiKey: string): Promise<typeof google> {
     script.async = true;
     script.defer = true;
     script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}`;
-    script.onload = () => resolve((window as any).google);
+    script.onload = () => resolve((window as unknown as { google: typeof google }).google);
     script.onerror = () => reject(new Error('Failed to load Google Maps script'));
     document.head.appendChild(script);
   });
@@ -102,12 +102,12 @@ export default function LocationPage() {
           const circle = generateCirclePoints(umCenter, 300, 90);
           setPoints(circle);
         }
-      } catch (e: any) {
+      } catch (e) {
         // On error, show demo circle
         const umCenter = { lat: 3.1199, lng: 101.6544 };
         const circle = generateCirclePoints(umCenter, 300, 90);
         setPoints(circle);
-        setError(e?.message || 'Unable to load locations');
+        setError(e instanceof Error ? e.message : 'Unable to load locations');
       } finally {
         setLoading(false);
       }

@@ -59,7 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await fetchJson<{ user: ApiUser }>(`/auth/me`, { method: 'GET' }, token);
       setUser(data.user);
       saveStored({ token, user: data.user });
-    } catch (e: any) {
+    } catch {
       // token invalid
       setUser(null);
       setToken(null);

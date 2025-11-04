@@ -15,7 +15,7 @@ import { useAuth } from '@/context/AuthContext';
 const BottomNav = () => {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { logout } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
 
   const tabs = [
@@ -32,6 +32,7 @@ const BottomNav = () => {
     if (currentTab) {
       setActiveTab(currentTab.id);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
   const handleTabClick = (tab: typeof tabs[0]) => {

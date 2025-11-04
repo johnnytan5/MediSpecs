@@ -39,8 +39,8 @@ export default function VideosPage() {
         const data: VideoItem[] = await res.json();
         const valid = Array.isArray(data) ? data : [];
         setAllVideos(valid);
-      } catch (e: any) {
-        setError(e?.message || 'Unable to load videos');
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Unable to load videos');
       } finally {
         setLoading(false);
       }

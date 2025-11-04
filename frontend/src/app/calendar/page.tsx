@@ -88,10 +88,7 @@ export default function CalendarPage() {
     });
   };
 
-  const getFoodRecordsForDate = (date: Date) => {
-    // In a real app, this would filter food records by date
-    return foodRecords;
-  };
+  // Removed unused function - will be needed when implementing date filtering
 
   const getTypeColor = (type: string) => {
     switch (type) {
@@ -126,7 +123,7 @@ export default function CalendarPage() {
         {/* Daily Summary */}
         <div className="bg-gradient-to-r from-orange-50 to-red-50 rounded-lg p-4 border border-orange-200">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold text-gray-900">Today's Nutrition</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Today&apos;s Nutrition</h2>
             <div className="flex items-center space-x-2 text-orange-600">
               <Zap className="w-5 h-5" />
               <span className="text-2xl font-bold">{getTotalCalories()}</span>
@@ -203,7 +200,7 @@ export default function CalendarPage() {
         {/* Today's Food Records */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Today's Food</h3>
+            <h3 className="text-lg font-semibold text-gray-900">Today&apos;s Food</h3>
             <button className="flex items-center space-x-2 text-orange-600 hover:text-orange-700">
               <Plus className="w-4 h-4" />
               <span className="text-sm font-medium">Add Food</span>
