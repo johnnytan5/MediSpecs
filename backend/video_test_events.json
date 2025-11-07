@@ -1,0 +1,107 @@
+{
+  "list_videos": {
+    "requestContext": {
+      "http": {
+        "method": "GET",
+        "path": "/videos"
+      }
+    },
+    "queryStringParameters": {
+      "userId": "u_123"
+    }
+  },
+  "list_videos_with_date_filter": {
+    "requestContext": {
+      "http": {
+        "method": "GET",
+        "path": "/videos"
+      }
+    },
+    "queryStringParameters": {
+      "userId": "u_123",
+      "dateFrom": "2025-11-01T00:00:00Z",
+      "dateTo": "2025-11-30T23:59:59Z"
+    }
+  },
+  "create_video": {
+    "requestContext": {
+      "http": {
+        "method": "POST",
+        "path": "/videos"
+      }
+    },
+    "body": "{\"userId\":\"u_123\",\"deviceId\":\"d_123\",\"title\":\"Morning Recording\",\"recordedAt\":\"2025-11-03T14:30:00Z\",\"durationSec\":120,\"fileSizeBytes\":10485760,\"mimeType\":\"video/mp4\"}"
+  },
+  "get_video": {
+    "requestContext": {
+      "http": {
+        "method": "GET",
+        "path": "/videos/v_123"
+      }
+    },
+    "pathParameters": {
+      "videoId": "v_123"
+    },
+    "queryStringParameters": {
+      "userId": "u_123"
+    }
+  },
+  "get_upload_url": {
+    "requestContext": {
+      "http": {
+        "method": "GET",
+        "path": "/videos/v_123/upload-url"
+      }
+    },
+    "pathParameters": {
+      "videoId": "v_123"
+    },
+    "queryStringParameters": {
+      "userId": "u_123",
+      "contentType": "video/mp4"
+    }
+  },
+  "get_playback_url": {
+    "requestContext": {
+      "http": {
+        "method": "GET",
+        "path": "/videos/v_123/playback-url"
+      }
+    },
+    "pathParameters": {
+      "videoId": "v_123"
+    },
+    "queryStringParameters": {
+      "userId": "u_123"
+    }
+  },
+  "get_thumbnail_url": {
+    "requestContext": {
+      "http": {
+        "method": "GET",
+        "path": "/videos/v_123/thumbnail-url"
+      }
+    },
+    "pathParameters": {
+      "videoId": "v_123"
+    },
+    "queryStringParameters": {
+      "userId": "u_123"
+    }
+  },
+  "delete_video": {
+    "requestContext": {
+      "http": {
+        "method": "DELETE",
+        "path": "/videos/v_123"
+      }
+    },
+    "pathParameters": {
+      "videoId": "v_123"
+    },
+    "queryStringParameters": {
+      "userId": "u_123"
+    }
+  }
+}
+

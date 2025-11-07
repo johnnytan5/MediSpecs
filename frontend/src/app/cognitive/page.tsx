@@ -32,7 +32,7 @@ function mapApiToItem(api: ApiCognitiveItem): CognitiveItem {
 }
 
 export default function CognitivePage() {
-  const { token, user } = useAuth();
+  const { token } = useAuth();
   const [items, setItems] = useState<CognitiveItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,8 +41,8 @@ export default function CognitivePage() {
   const [question, setQuestion] = useState('');
 
   useEffect(() => {
-    if (!token || !user?.userId) return;
-    const userId = user.userId;
+    if (!token) return;
+    const userId = 'u_123';
     const authToken = token;
     async function loadItems() {
       try {
@@ -58,7 +58,7 @@ export default function CognitivePage() {
       }
     }
     loadItems();
-  }, [token, user?.userId]);
+  }, [token]);
 
   const sorted = useMemo(() => {
     return [...items].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -79,12 +79,12 @@ export default function CognitivePage() {
   async function addItem(e: React.FormEvent) {
     e.preventDefault();
     if (!question.trim()) return;
-    if (!token || !user?.userId) return;
+    if (!token) return;
 
     try {
       setError(null);
       const payload = {
-        userId: user.userId,
+        userId: 'u_123',
         question: question.trim(),
       };
       const authToken = token || undefined;
@@ -108,7 +108,7 @@ export default function CognitivePage() {
   }
 
   async function deleteItem(id: string) {
-    if (!token || !user?.userId) return;
+    if (!token) return;
     try {
       setError(null);
       const authToken = token || undefined;

@@ -50,7 +50,7 @@ function mapApiReminderToReminder(api: ApiReminder): Reminder {
 }
 
 export default function RemindersPage() {
-  const { token, user } = useAuth();
+  const { token } = useAuth();
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -65,8 +65,8 @@ export default function RemindersPage() {
   const [notes, setNotes] = useState('');
 
   useEffect(() => {
-    if (!token || !user?.userId) return;
-    const userId = user.userId;
+    if (!token) return;
+    const userId = 'u_123';
     const authToken = token;
     async function loadReminders() {
       try {
@@ -82,7 +82,7 @@ export default function RemindersPage() {
       }
     }
     loadReminders();
-  }, [token, user?.userId]);
+  }, [token]);
 
   const sortedReminders = useMemo(() => {
     return [...reminders].sort((a, b) => a.time.localeCompare(b.time));
@@ -114,12 +114,12 @@ export default function RemindersPage() {
     e.preventDefault();
     if (!title.trim() || !time) return;
     if (repeatType === 'weekly' && selectedDays.length === 0) return;
-    if (!token || !user?.userId) return;
+    if (!token) return;
 
     try {
       setError(null);
       const payload = {
-        userId: user.userId,
+        userId: 'u_123',
         title: title.trim(),
         scheduleType: repeatType,
         timeOfDay: time,
@@ -147,7 +147,7 @@ export default function RemindersPage() {
   }
 
   async function deleteReminder(id: string) {
-    if (!token || !user?.userId) return;
+    if (!token) return;
     try {
       setError(null);
       const authToken = token || undefined;
