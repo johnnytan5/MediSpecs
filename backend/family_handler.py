@@ -107,6 +107,9 @@ def handler(event, context):
             family_id = path.split("/family/")[1].split("/")[0]
             return handle_get_photo(user_id, family_id)
     except Exception as e:
+        print(f"Handler error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return {
             "statusCode": 500,
             "headers": CORS_HEADERS,
@@ -225,7 +228,7 @@ def handle_create_family(user_id, body):
 
     table.put_item(Item=item)
 
-    # Verify object exists before generating presigned URL
+    # Verify object exists before generating URL
     try:
         s3.head_object(Bucket=BUCKET, Key=s3_key)
         print(f"Verified object exists in S3: {s3_key}")
@@ -335,54 +338,131 @@ def handle_get_photo(user_id, family_id):
         }
 
 def handle_recognize(user_id, body):
-    image_b64 = body.get("imageBase64")
-    if not image_b64:
-        return {"statusCode": 400, "headers": CORS_HEADERS, "body": json.dumps({"message": "imageBase64 is required"})}
+    """Recognize a face from base64-encoded image"""
+    try:
+        print(f"Recognize request for user: {user_id}")
+        print(f"Request body keys: {list(body.keys())}")
+        
+        image_b64 = body.get("imageBase64")
+        if not image_b64:
+            print("Error: imageBase64 not provided")
+            return {
+                "statusCode": 400,
+                "headers": CORS_HEADERS,
+                "body": json.dumps({"message": "imageBase64 is required"})
+            }
 
-    min_conf = float(body.get("minConfidence", 85))
+        min_conf = float(body.get("minConfidence", 85))
+        print(f"Using minConfidence: {min_conf}")
 
-    if "," in image_b64:
-        image_b64 = image_b64.split(",", 1)[1]
+        # Remove data URL prefix if present
+        if "," in image_b64:
+            image_b64 = image_b64.split(",", 1)[1]
 
-    image_bytes = base64.b64decode(image_b64)
+        # Decode base64 image
+        try:
+            image_bytes = base64.b64decode(image_b64)
+            print(f"Decoded image size: {len(image_bytes)} bytes")
+        except Exception as e:
+            print(f"Error decoding base64: {str(e)}")
+            return {
+                "statusCode": 400,
+                "headers": CORS_HEADERS,
+                "body": json.dumps({"message": f"Invalid base64 image: {str(e)}"})
+            }
 
-    search_resp = rekog.search_faces_by_image(
-        CollectionId=COLLECTION,
-        Image={"Bytes": image_bytes},
-        FaceMatchThreshold=min_conf,
-        MaxFaces=1,
-    )
-    matches = search_resp.get("FaceMatches", [])
-    if not matches:
-        return {"statusCode": 200, "headers": CORS_HEADERS, "body": json.dumps({"match": None})}
+        # Search for face in Rekognition
+        try:
+            print(f"Searching faces in collection: {COLLECTION}")
+            search_resp = rekog.search_faces_by_image(
+                CollectionId=COLLECTION,
+                Image={"Bytes": image_bytes},
+                FaceMatchThreshold=min_conf,
+                MaxFaces=1,
+            )
+            print(f"Rekognition response: {json.dumps(search_resp, default=str)}")
+        except Exception as e:
+            print(f"Error calling Rekognition: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return {
+                "statusCode": 500,
+                "headers": CORS_HEADERS,
+                "body": json.dumps({"message": f"Face search failed: {str(e)}"})
+            }
 
-    match = matches[0]
-    face_id = match["Face"]["FaceId"]
-    similarity = match.get("Similarity")
+        matches = search_resp.get("FaceMatches", [])
+        if not matches:
+            print("No face matches found")
+            return {
+                "statusCode": 200,
+                "headers": CORS_HEADERS,
+                "body": json.dumps({"match": None})
+            }
 
-    ddb_resp = table.query(
-        IndexName=GSI_FACE,
-        KeyConditionExpression=Key("GSI2PK").eq(f"FACE#{face_id}"),
-        Limit=1,
-    )
-    if not ddb_resp.get("Items"):
+        match = matches[0]
+        face_id = match["Face"]["FaceId"]
+        similarity = match.get("Similarity")
+        print(f"Found match: faceId={face_id}, similarity={similarity}")
+
+        # Look up family member details from DynamoDB
+        try:
+            print(f"Querying DynamoDB: GSI={GSI_FACE}, FACE#{face_id}")
+            ddb_resp = table.query(
+                IndexName=GSI_FACE,
+                KeyConditionExpression=Key("GSI2PK").eq(f"FACE#{face_id}"),
+                Limit=1,
+            )
+            print(f"DynamoDB items found: {len(ddb_resp.get('Items', []))}")
+        except Exception as e:
+            print(f"Error querying DynamoDB: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return {
+                "statusCode": 500,
+                "headers": CORS_HEADERS,
+                "body": json.dumps({"message": f"Database query failed: {str(e)}"})
+            }
+
+        if not ddb_resp.get("Items"):
+            print("Warning: Face found but no metadata in DynamoDB")
+            return {
+                "statusCode": 200,
+                "headers": CORS_HEADERS,
+                "body": json.dumps({
+                    "match": {
+                        "faceId": face_id,
+                        "similarity": similarity,
+                        "metadata": None
+                    }
+                })
+            }
+
+        item = ddb_resp["Items"][0]
+        result = {
+            "faceId": face_id,
+            "similarity": similarity,
+            "metadata": {
+                "familyMemberId": item.get("familyMemberId"),
+                "name": item.get("name"),
+                "relationship": item.get("relationship"),
+                "photoS3Key": item.get("photoS3Key"),
+                "userId": item.get("userId"),
+            },
+        }
+        print(f"Returning match result: {result['metadata']['name']}")
         return {
             "statusCode": 200,
             "headers": CORS_HEADERS,
-            "body": json.dumps({"match": {"faceId": face_id, "similarity": similarity, "metadata": None}}),
+            "body": json.dumps({"match": result}, default=json_default)
         }
 
-    item = ddb_resp["Items"][0]
-    result = {
-        "faceId": face_id,
-        "similarity": similarity,
-        "metadata": {
-            "familyMemberId": item.get("familyMemberId"),
-            "name": item.get("name"),
-            "relationship": item.get("relationship"),
-            "photoS3Key": item.get("photoS3Key"),
-            "userId": item.get("userId"),
-        },
-    }
-    return {"statusCode": 200, "headers": CORS_HEADERS, "body": json.dumps({"match": result}, default=json_default)}
-
+    except Exception as e:
+        print(f"Unexpected error in handle_recognize: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "statusCode": 500,
+            "headers": CORS_HEADERS,
+            "body": json.dumps({"message": f"Recognition failed: {str(e)}"})
+        }

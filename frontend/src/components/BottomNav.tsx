@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
-  MessageCircle, 
+  Glasses, 
   Bell, 
   MapPin, 
   Video, 
@@ -19,7 +19,7 @@ const BottomNav = () => {
   const [activeTab, setActiveTab] = useState(0);
 
   const tabs = [
-    { id: 0, name: 'Chat', icon: MessageCircle, path: '/' },
+    { id: 0, name: 'Device', icon: Glasses, path: '/' },
     { id: 1, name: 'Reminders', icon: Bell, path: '/reminders' },
     { id: 2, name: 'Location', icon: MapPin, path: '/location' },
     { id: 3, name: 'Videos', icon: Video, path: '/videos' },

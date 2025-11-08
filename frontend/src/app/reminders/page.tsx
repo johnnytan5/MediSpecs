@@ -56,6 +56,29 @@ export default function RemindersPage() {
   const [error, setError] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  
+  const streamBaseUrl = process.env.NEXT_PUBLIC_STREAM_BASE_URL || '';
+
+  // Helper function to trigger device webhook
+  const triggerDeviceWebhook = async () => {
+    if (!streamBaseUrl) return; // Silent skip if webhook URL not configured
+    
+    try {
+      // Wait 500ms buffer for DynamoDB propagation
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Trigger webhook with empty body
+      await fetch(`${streamBaseUrl}/webhook/reminder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      // Silent success - no need to notify user
+    } catch (error) {
+      // Silent failure - device might be offline, which is fine
+      console.log('Webhook notification skipped (device may be offline)');
+    }
+  };
 
   // Form state
   const [title, setTitle] = useState('');
@@ -141,6 +164,9 @@ export default function RemindersPage() {
       setIsOpen(false);
       resetForm();
       setEditingId(null);
+      
+      // Trigger device webhook after successful create/update
+      triggerDeviceWebhook();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create reminder');
     }
@@ -153,6 +179,9 @@ export default function RemindersPage() {
       const authToken = token || undefined;
       await fetchJson(`/reminders/${id}`, { method: 'DELETE' }, authToken);
       setReminders(prev => prev.filter(r => r.id !== id));
+      
+      // Trigger device webhook after successful delete
+      triggerDeviceWebhook();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to delete reminder');
     }
