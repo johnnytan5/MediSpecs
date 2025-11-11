@@ -6,15 +6,19 @@ import BottomNav from '@/components/BottomNav';
 import { useAuth } from '@/context/AuthContext';
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
-  const { token } = useAuth();
+  const { token, loading } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
 
   useEffect(() => {
+    // Don't redirect while auth is still loading from localStorage
+    if (loading) return;
+    
+    // Only redirect to /auth if no token and not already on /auth page
     if (!token && pathname !== '/auth') {
       router.replace('/auth');
     }
-  }, [token, pathname, router]);
+  }, [token, loading, pathname, router]);
 
   const showNav = Boolean(token);
   const topPadding = showNav ? 'pt-16' : '';

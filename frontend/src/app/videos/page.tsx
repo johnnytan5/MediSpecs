@@ -195,34 +195,45 @@ export default function VideosPage() {
       ) : videos.length === 0 ? (
         <div className="text-sm text-gray-500">No videos found for the selected range.</div>
       ) : (
-        <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {videos.map(v => (
-            <li 
-              key={v.id} 
-              className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm hover:shadow-md hover:border-blue-300 cursor-pointer transition-all"
-              onClick={() => playVideo(v)}
-            >
-              <div className="aspect-video bg-gray-100 relative group">
-                {v.thumbnailUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={v.thumbnailUrl} alt={v.title} className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">No thumbnail</div>
-                )}
-                {/* Play button overlay */}
-                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all flex items-center justify-center">
-                  <div className="w-16 h-16 bg-white bg-opacity-90 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <div className="w-0 h-0 border-l-[20px] border-l-blue-600 border-t-[12px] border-t-transparent border-b-[12px] border-b-transparent ml-1"></div>
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+          <ul className="divide-y divide-gray-200">
+            {videos.map(v => (
+              <li 
+                key={v.id} 
+                className="flex items-center gap-4 p-4 hover:bg-gray-50 cursor-pointer transition-colors group"
+                onClick={() => playVideo(v)}
+              >
+                {/* Play Button Icon */}
+                <div className="flex-shrink-0">
+                  <div className="w-12 h-12 rounded-full bg-gray-100 group-hover:bg-blue-600 flex items-center justify-center transition-colors">
+                    <div className="w-0 h-0 border-l-[14px] border-l-gray-400 group-hover:border-l-white border-t-[9px] border-t-transparent border-b-[9px] border-b-transparent ml-1 transition-colors"></div>
                   </div>
                 </div>
-              </div>
-              <div className="p-3">
-                <p className="font-medium text-gray-900 truncate" title={v.title}>{v.title}</p>
-                <p className="text-xs text-gray-600 mt-0.5">{formatTime(v.recordedAt)}{v.durationSec ? ` · ${Math.round(v.durationSec/60)} min` : ''}</p>
-              </div>
-            </li>
-          ))}
-        </ul>
+
+                {/* Video Info */}
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-medium text-gray-900 truncate">{v.title}</h3>
+                  <div className="flex items-center gap-3 mt-1 text-sm text-gray-600">
+                    <span>{formatTime(v.recordedAt)}</span>
+                    {v.durationSec && (
+                      <>
+                        <span className="text-gray-400">•</span>
+                        <span>{Math.floor(v.durationSec / 60)}:{String(Math.floor(v.durationSec % 60)).padStart(2, '0')}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Arrow Icon */}
+                <div className="flex-shrink-0 text-gray-400 group-hover:text-blue-600 transition-colors">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {/* Video Player Modal */}
