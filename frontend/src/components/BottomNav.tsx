@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
-  Glasses, 
+  Home, 
   Bell, 
   MapPin, 
   Video, 
@@ -19,7 +19,7 @@ const BottomNav = () => {
   const [activeTab, setActiveTab] = useState(0);
 
   const tabs = [
-    { id: 0, name: 'Device', icon: Glasses, path: '/' },
+    { id: 0, name: 'Home', icon: Home, path: '/' },
     { id: 1, name: 'Reminders', icon: Bell, path: '/reminders' },
     { id: 2, name: 'Location', icon: MapPin, path: '/location' },
     { id: 3, name: 'Videos', icon: Video, path: '/videos' },
@@ -41,10 +41,10 @@ const BottomNav = () => {
   };
 
   return (
-    <nav className="fixed top-0 left-0 right-0 bg-white/95 backdrop-blur border-b border-gray-200 z-50">
+    <nav className="fixed top-0 left-0 right-0 bg-slate-900/95 backdrop-blur border-b border-purple-500/30 z-50">
       <div className="max-w-6xl mx-auto px-4">
         <div className="h-14 flex items-center justify-between">
-          <div className="text-base font-semibold text-gray-900">MediSpecs</div>
+          <div className="text-base font-semibold text-white">Remind AR</div>
           <div className="flex items-center gap-1 sm:gap-2">
             {tabs.map((tab) => {
               const Icon = tab.icon;
@@ -55,8 +55,8 @@ const BottomNav = () => {
                   onClick={() => handleTabClick(tab)}
                   className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
                     isActive
-                      ? 'text-blue-600 bg-blue-50'
-                      : 'text-gray-800 hover:text-gray-900 hover:bg-gray-50'
+                      ? 'text-cyan-400 bg-purple-600/30 shadow-lg shadow-cyan-500/20'
+                      : 'text-gray-300 hover:text-white hover:bg-purple-900/30'
                   }`}
                 >
                   <Icon size={18} />
