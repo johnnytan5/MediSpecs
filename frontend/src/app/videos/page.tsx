@@ -28,6 +28,12 @@ type ApiVideo = {
   updatedAt?: string;
 };
 
+type PlaybackUrlResponse = {
+  playbackUrl: string;
+  s3Key: string;
+  expiresIn: number;
+};
+
 function formatTime(ts: string) {
   try {
     const d = new Date(ts);
@@ -74,6 +80,11 @@ export default function VideosPage() {
   const [timeFrom, setTimeFrom] = useState<string>('');
   const [timeTo, setTimeTo] = useState<string>('');
 
+  // Video playback
+  const [selectedVideo, setSelectedVideo] = useState<VideoItem | null>(null);
+  const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
+  const [loadingPlayback, setLoadingPlayback] = useState(false);
+
   useEffect(() => {
     if (!token) return;
     
@@ -113,6 +124,34 @@ export default function VideosPage() {
     
     fetchVideos();
   }, [token, selectedDate, timeFrom, timeTo]);
+
+  // Function to fetch playback URL and play video
+  const playVideo = async (video: VideoItem) => {
+    setSelectedVideo(video);
+    setLoadingPlayback(true);
+    setPlaybackUrl(null);
+
+    try {
+      const userId = 'u_123'; // demo: shared user
+      const response = await fetchJson<PlaybackUrlResponse>(
+        `/videos/${video.id}/playback-url?userId=${userId}`,
+        { method: 'GET' },
+        token || undefined
+      );
+      setPlaybackUrl(response.playbackUrl);
+    } catch (e) {
+      console.error('Failed to fetch playback URL:', e);
+      alert('Failed to load video. Please try again.');
+      setSelectedVideo(null);
+    } finally {
+      setLoadingPlayback(false);
+    }
+  };
+
+  const closePlayer = () => {
+    setSelectedVideo(null);
+    setPlaybackUrl(null);
+  };
 
   return (
     <div className="pb-8">
@@ -158,14 +197,24 @@ export default function VideosPage() {
       ) : (
         <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {videos.map(v => (
-            <li key={v.id} className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm">
-              <div className="aspect-video bg-gray-100">
+            <li 
+              key={v.id} 
+              className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm hover:shadow-md hover:border-blue-300 cursor-pointer transition-all"
+              onClick={() => playVideo(v)}
+            >
+              <div className="aspect-video bg-gray-100 relative group">
                 {v.thumbnailUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={v.thumbnailUrl} alt={v.title} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">No thumbnail</div>
                 )}
+                {/* Play button overlay */}
+                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all flex items-center justify-center">
+                  <div className="w-16 h-16 bg-white bg-opacity-90 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="w-0 h-0 border-l-[20px] border-l-blue-600 border-t-[12px] border-t-transparent border-b-[12px] border-b-transparent ml-1"></div>
+                  </div>
+                </div>
               </div>
               <div className="p-3">
                 <p className="font-medium text-gray-900 truncate" title={v.title}>{v.title}</p>
@@ -174,6 +223,65 @@ export default function VideosPage() {
             </li>
           ))}
         </ul>
+      )}
+
+      {/* Video Player Modal */}
+      {selectedVideo && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4"
+          onClick={closePlayer}
+        >
+          <div 
+            className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-auto shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">{selectedVideo.title}</h2>
+                <p className="text-sm text-gray-500">{formatTime(selectedVideo.recordedAt)}</p>
+              </div>
+              <button 
+                onClick={closePlayer}
+                className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Video Player */}
+            <div className="p-4">
+              {loadingPlayback ? (
+                <div className="aspect-video bg-gray-100 flex items-center justify-center">
+                  <div className="text-gray-500">Loading video...</div>
+                </div>
+              ) : playbackUrl ? (
+                <video 
+                  controls 
+                  autoPlay
+                  className="w-full rounded-lg bg-black"
+                  key={playbackUrl}
+                >
+                  <source src={playbackUrl} type="video/mp4" />
+                  Your browser does not support the video tag.
+                </video>
+              ) : (
+                <div className="aspect-video bg-gray-100 flex items-center justify-center">
+                  <div className="text-red-500">Failed to load video</div>
+                </div>
+              )}
+            </div>
+
+            {/* Video Info */}
+            {selectedVideo.durationSec && (
+              <div className="px-4 pb-4">
+                <p className="text-sm text-gray-600">
+                  Duration: {Math.floor(selectedVideo.durationSec / 60)}:{String(Math.floor(selectedVideo.durationSec % 60)).padStart(2, '0')}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
