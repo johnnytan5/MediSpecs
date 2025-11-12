@@ -1,0 +1,159 @@
+{
+  "createMedicationWithPhoto": {
+    "version": "2.0",
+    "routeKey": "POST /medications",
+    "rawPath": "/medications",
+    "requestContext": {
+      "http": {
+        "method": "POST",
+        "path": "/medications"
+      }
+    },
+    "body": "{\"userId\":\"u_123\",\"name\":\"Aspirin 100mg\",\"time\":\"09:00\",\"frequency\":\"daily\",\"notes\":\"Take with food\",\"imageBase64\":\"data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAIBAQIBAQICAgICAgICAwUDAwMDAwYEBAMFBwYHBwcGBwcICQsJCAgKCAcHCg0KCgsMDAwMBwkODw0MDgsMDAz/2wBDAQICAgMDAwYDAwYMCAcIDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAz/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCRAFmH/9k=\",\"contentType\":\"image/jpeg\"}",
+    "isBase64Encoded": false
+  },
+
+  "createMedicationWithoutPhoto": {
+    "version": "2.0",
+    "routeKey": "POST /medications",
+    "rawPath": "/medications",
+    "requestContext": {
+      "http": {
+        "method": "POST",
+        "path": "/medications"
+      }
+    },
+    "body": "{\"userId\":\"u_123\",\"name\":\"Metformin 500mg\",\"time\":\"20:00\",\"frequency\":\"weekly\",\"frequencyDetails\":[1,3,5],\"notes\":\"Take after dinner\"}",
+    "isBase64Encoded": false
+  },
+
+  "createMedicationAsNeeded": {
+    "version": "2.0",
+    "routeKey": "POST /medications",
+    "rawPath": "/medications",
+    "requestContext": {
+      "http": {
+        "method": "POST",
+        "path": "/medications"
+      }
+    },
+    "body": "{\"userId\":\"u_123\",\"name\":\"Ibuprofen 400mg\",\"time\":\"00:00\",\"frequency\":\"as-needed\",\"notes\":\"For pain relief\"}",
+    "isBase64Encoded": false
+  },
+
+  "listMedications": {
+    "version": "2.0",
+    "routeKey": "GET /medications",
+    "rawPath": "/medications",
+    "requestContext": {
+      "http": {
+        "method": "GET",
+        "path": "/medications"
+      }
+    },
+    "queryStringParameters": {
+      "userId": "u_123"
+    }
+  },
+
+  "getMedication": {
+    "version": "2.0",
+    "routeKey": "GET /medications/{id}",
+    "rawPath": "/medications/med_abc123",
+    "requestContext": {
+      "http": {
+        "method": "GET",
+        "path": "/medications/med_abc123"
+      }
+    },
+    "pathParameters": {
+      "id": "med_abc123"
+    },
+    "queryStringParameters": {
+      "userId": "u_123"
+    }
+  },
+
+  "updateMedication": {
+    "version": "2.0",
+    "routeKey": "PUT /medications/{id}",
+    "rawPath": "/medications/med_abc123",
+    "requestContext": {
+      "http": {
+        "method": "PUT",
+        "path": "/medications/med_abc123"
+      }
+    },
+    "pathParameters": {
+      "id": "med_abc123"
+    },
+    "body": "{\"userId\":\"u_123\",\"name\":\"Aspirin 75mg\",\"time\":\"08:00\",\"notes\":\"Take in morning with breakfast\"}",
+    "isBase64Encoded": false
+  },
+
+  "updateMedicationWithNewPhoto": {
+    "version": "2.0",
+    "routeKey": "PUT /medications/{id}",
+    "rawPath": "/medications/med_abc123",
+    "requestContext": {
+      "http": {
+        "method": "PUT",
+        "path": "/medications/med_abc123"
+      }
+    },
+    "pathParameters": {
+      "id": "med_abc123"
+    },
+    "body": "{\"userId\":\"u_123\",\"name\":\"Aspirin 75mg\",\"imageBase64\":\"data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAIBAQIBAQICAgICAgICAwUDAwMDAwYEBAMFBwYHBwcGBwcICQsJCAgKCAcHCg0KCgsMDAwMBwkODw0MDgsMDAz/2wBDAQICAgMDAwYDAwYMCAcIDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAz/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCRAFmH/9k=\",\"contentType\":\"image/jpeg\"}",
+    "isBase64Encoded": false
+  },
+
+  "deleteMedication": {
+    "version": "2.0",
+    "routeKey": "DELETE /medications/{id}",
+    "rawPath": "/medications/med_abc123",
+    "requestContext": {
+      "http": {
+        "method": "DELETE",
+        "path": "/medications/med_abc123"
+      }
+    },
+    "pathParameters": {
+      "id": "med_abc123"
+    },
+    "queryStringParameters": {
+      "userId": "u_123"
+    }
+  },
+
+  "getPhoto": {
+    "version": "2.0",
+    "routeKey": "GET /medications/{id}/photo",
+    "rawPath": "/medications/med_abc123/photo",
+    "requestContext": {
+      "http": {
+        "method": "GET",
+        "path": "/medications/med_abc123/photo"
+      }
+    },
+    "pathParameters": {
+      "id": "med_abc123"
+    },
+    "queryStringParameters": {
+      "userId": "u_123"
+    }
+  },
+
+  "optionsCORS": {
+    "version": "2.0",
+    "routeKey": "OPTIONS /medications",
+    "rawPath": "/medications",
+    "requestContext": {
+      "http": {
+        "method": "OPTIONS",
+        "path": "/medications"
+      }
+    }
+  }
+}
+

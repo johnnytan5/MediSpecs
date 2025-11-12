@@ -3,13 +3,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { 
   User, 
-  Mic,
+  Pill,
   Images,
   Phone,
   Camera,
   Upload,
   Trash2,
-  Plus
+  Plus,
+  Clock,
+  Edit2
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { fetchJson } from '@/lib/api';
@@ -24,12 +26,19 @@ type ProfileForm = {
   notes: string;
 };
 
-type VoiceRecording = {
+type FrequencyType = 'daily' | 'weekly' | 'monthly' | 'as-needed';
+
+type Medication = {
   id: string;
-  label: string;
-  filename: string;
-  size: number;
+  name: string;
+  photoUrl?: string | null;
+  photoS3Key?: string;
+  time: string; // HH:MM format
+  frequency: FrequencyType;
+  frequencyDetails?: number[]; // For weekly: [0,1,2] = Sun, Mon, Tue
+  notes?: string;
   addedAt: string;
+  isLocal?: boolean;
 };
 
 type FamilyMember = {
@@ -72,20 +81,23 @@ const DEMO_PROFILE: ProfileForm = {
   notes: 'Prefers morning walks. Mild hearing loss on left ear.',
 };
 
-const INITIAL_VOICE_RECORDINGS: VoiceRecording[] = [
+const INITIAL_MEDICATIONS: Medication[] = [
   {
-    id: 'voice-1',
-    label: 'Good morning reminder',
-    filename: 'good-morning.mp3',
-    size: 256000,
-    addedAt: '2025-10-28T08:00:00Z',
+    id: 'med-1',
+    name: 'Aspirin 100mg',
+    time: '09:00',
+    frequency: 'daily',
+    notes: 'Take with food',
+    addedAt: '2025-11-01T08:00:00Z',
   },
   {
-    id: 'voice-2',
-    label: 'Medication reminder',
-    filename: 'medication-9am.mp3',
-    size: 312000,
-    addedAt: '2025-10-26T09:30:00Z',
+    id: 'med-2',
+    name: 'Metformin 500mg',
+    time: '20:00',
+    frequency: 'weekly',
+    frequencyDetails: [1, 3, 5], // Mon, Wed, Fri
+    notes: 'Take after dinner',
+    addedAt: '2025-10-28T09:30:00Z',
   },
 ];
 
@@ -110,15 +122,21 @@ export default function ProfilePage() {
   const { token } = useAuth();
   const API_USER_ID = 'u_123';
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'voice' | 'family' | 'contacts'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'medications' | 'family' | 'contacts'>('profile');
 
   const [profileForm, setProfileForm] = useState<ProfileForm>(DEMO_PROFILE);
   const [profileSavedAt, setProfileSavedAt] = useState<string | null>(null);
 
-  const [voiceLabel, setVoiceLabel] = useState('');
-  const [voiceFile, setVoiceFile] = useState<File | null>(null);
-  const [voiceRecordings, setVoiceRecordings] = useState<VoiceRecording[]>(INITIAL_VOICE_RECORDINGS);
-  const voiceInputRef = useRef<HTMLInputElement | null>(null);
+  // Medication state
+  const [medName, setMedName] = useState('');
+  const [medTime, setMedTime] = useState('09:00');
+  const [medFrequency, setMedFrequency] = useState<FrequencyType>('daily');
+  const [medFrequencyDetails, setMedFrequencyDetails] = useState<number[]>([]);
+  const [medNotes, setMedNotes] = useState('');
+  const [medFile, setMedFile] = useState<File | null>(null);
+  const [medications, setMedications] = useState<Medication[]>(INITIAL_MEDICATIONS);
+  const [editingMedId, setEditingMedId] = useState<string | null>(null);
+  const medInputRef = useRef<HTMLInputElement | null>(null);
 
   const [familyName, setFamilyName] = useState('');
   const [familyRelationship, setFamilyRelationship] = useState('');
@@ -138,17 +156,24 @@ export default function ProfilePage() {
 
   useEffect(() => {
     return () => {
+      // Cleanup medication photos
+      medications.forEach(med => {
+        if (med.isLocal && med.photoUrl) {
+          URL.revokeObjectURL(med.photoUrl);
+        }
+      });
+      // Cleanup family photos
       familyMembers.forEach(member => {
         if (member.isLocal && member.photoUrl) {
           URL.revokeObjectURL(member.photoUrl);
         }
       });
     };
-  }, [familyMembers]);
+  }, [medications, familyMembers]);
 
   const tabs = useMemo(() => ([
     { id: 'profile', name: 'Senior Profile', icon: User },
-    { id: 'voice', name: 'Voice Library', icon: Mic },
+    { id: 'medications', name: 'Medications', icon: Pill },
     { id: 'family', name: 'Family Album', icon: Images },
     { id: 'contacts', name: 'Emergency Contacts', icon: Phone },
   ]), []);
@@ -194,28 +219,248 @@ export default function ProfilePage() {
     setProfileSavedAt(new Date().toISOString());
   };
 
-  const handleAddVoiceRecording = (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!voiceLabel.trim() || !voiceFile) return;
+  // Medication state
+  const [medicationsLoading, setMedicationsLoading] = useState(true);
+  const [medicationsError, setMedicationsError] = useState<string | null>(null);
+  const [isSubmittingMed, setIsSubmittingMed] = useState(false);
 
-    const newRecording: VoiceRecording = {
-      id: `voice-${Date.now()}`,
-      label: voiceLabel.trim(),
-      filename: voiceFile.name,
-      size: voiceFile.size,
-      addedAt: new Date().toISOString(),
-    };
+  // Webhook sync helper
+  const syncMedicationsToDevice = async () => {
+    const streamBaseUrl = process.env.NEXT_PUBLIC_STREAM_BASE_URL || '';
+    if (!streamBaseUrl) {
+      console.log('Stream URL not configured, skipping device sync');
+      return;
+    }
 
-    setVoiceRecordings(prev => [newRecording, ...prev]);
-    setVoiceLabel('');
-    setVoiceFile(null);
-    if (voiceInputRef.current) {
-      voiceInputRef.current.value = '';
+    try {
+      const response = await fetch(`${streamBaseUrl}/webhook/medications/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const data = await response.json();
+      
+      if (data.status === 'success') {
+        console.log(`✅ Synced ${data.syncedCount || 0} medications to device`);
+      } else {
+        console.warn('Device sync failed:', data.message);
+      }
+    } catch (error) {
+      // Silent failure - device might be offline, will auto-sync in 2 hours
+      console.log('Device sync skipped (device may be offline)');
     }
   };
 
-  const handleRemoveVoiceRecording = (id: string) => {
-    setVoiceRecordings(prev => prev.filter(item => item.id !== id));
+  // Fetch medications from API
+  useEffect(() => {
+    if (!token || activeTab !== 'medications') return;
+    
+    async function fetchMedications() {
+      try {
+        setMedicationsLoading(true);
+        setMedicationsError(null);
+        
+        const data = await fetchJson<any[]>(
+          `/medications?userId=${API_USER_ID}`,
+          { method: 'GET' },
+          token || undefined
+        );
+        
+        // Map API response to frontend format
+        const mapped = data.map((item: any) => ({
+          id: item.medicationId || item.id,
+          name: item.name,
+          photoUrl: item.photoUrl || null,
+          photoS3Key: item.photoS3Key || null,
+          time: item.time,
+          frequency: item.frequency as FrequencyType,
+          frequencyDetails: item.frequencyDetails || [],
+          notes: item.notes || '',
+          addedAt: item.createdAt || item.addedAt,
+          isLocal: false,
+        }));
+        
+        setMedications(mapped);
+      } catch (e) {
+        console.error('Failed to fetch medications:', e);
+        setMedicationsError(e instanceof Error ? e.message : 'Failed to load medications');
+      } finally {
+        setMedicationsLoading(false);
+      }
+    }
+    
+    fetchMedications();
+  }, [token, activeTab, API_USER_ID]);
+
+  // Medication handlers
+  const resetMedicationForm = () => {
+    setMedName('');
+    setMedTime('09:00');
+    setMedFrequency('daily');
+    setMedFrequencyDetails([]);
+    setMedNotes('');
+    setMedFile(null);
+    setEditingMedId(null);
+    if (medInputRef.current) {
+      medInputRef.current.value = '';
+    }
+  };
+
+  const toggleMedDay = (dayIndex: number) => {
+    setMedFrequencyDetails(prev =>
+      prev.includes(dayIndex)
+        ? prev.filter(d => d !== dayIndex)
+        : [...prev, dayIndex].sort()
+    );
+  };
+
+  const handleAddMedication = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!medName.trim() || !medTime) return;
+    if (medFrequency === 'weekly' && medFrequencyDetails.length === 0) return;
+    if (!token) {
+      setMedicationsError('You must be logged in');
+      return;
+    }
+
+    setIsSubmittingMed(true);
+    setMedicationsError(null);
+
+    try {
+      // Convert image to base64 if provided
+      let imageBase64 = null;
+      let contentType = null;
+      
+      if (medFile) {
+        const base64Result = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(medFile);
+        });
+        imageBase64 = base64Result;
+        contentType = medFile.type || 'image/jpeg';
+      }
+
+      const payload: any = {
+        userId: API_USER_ID,
+        name: medName.trim(),
+        time: medTime,
+        frequency: medFrequency,
+      };
+
+      if (medFrequency === 'weekly') {
+        payload.frequencyDetails = medFrequencyDetails;
+      }
+      if (medNotes.trim()) {
+        payload.notes = medNotes.trim();
+      }
+      if (imageBase64) {
+        payload.imageBase64 = imageBase64;
+        payload.contentType = contentType;
+      }
+
+      if (editingMedId) {
+        // Update existing medication
+        const updated = await fetchJson<any>(
+          `/medications/${editingMedId}`,
+          {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+          },
+          token || undefined
+        );
+
+        setMedications(prev => prev.map(med => 
+          med.id === editingMedId 
+            ? {
+                id: updated.medicationId || editingMedId,
+                name: updated.name,
+                photoUrl: updated.photoUrl || null,
+                photoS3Key: updated.photoS3Key || null,
+                time: updated.time,
+                frequency: updated.frequency,
+                frequencyDetails: updated.frequencyDetails || [],
+                notes: updated.notes || '',
+                addedAt: updated.createdAt || med.addedAt,
+                isLocal: false,
+              }
+            : med
+        ));
+      } else {
+        // Create new medication
+        const created = await fetchJson<any>(
+          '/medications',
+          {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          },
+          token || undefined
+        );
+
+        const newMed: Medication = {
+          id: created.medicationId,
+          name: created.name,
+          photoUrl: created.photoUrl || null,
+          photoS3Key: created.photoS3Key || null,
+          time: created.time,
+          frequency: created.frequency,
+          frequencyDetails: created.frequencyDetails || [],
+          notes: created.notes || '',
+          addedAt: created.createdAt,
+          isLocal: false,
+        };
+
+        setMedications(prev => [newMed, ...prev]);
+      }
+
+      // Trigger device sync (fire-and-forget, 500ms delay for DynamoDB consistency)
+      setTimeout(() => {
+        syncMedicationsToDevice();
+      }, 500);
+
+      resetMedicationForm();
+    } catch (e) {
+      console.error('Failed to save medication:', e);
+      setMedicationsError(e instanceof Error ? e.message : 'Failed to save medication');
+    } finally {
+      setIsSubmittingMed(false);
+    }
+  };
+
+  const handleEditMedication = (med: Medication) => {
+    setMedName(med.name);
+    setMedTime(med.time);
+    setMedFrequency(med.frequency);
+    setMedFrequencyDetails(med.frequencyDetails || []);
+    setMedNotes(med.notes || '');
+    setEditingMedId(med.id);
+    setMedicationsError(null);
+    // Note: We don't set medFile here as we can't reconstruct a File object from URL
+    // User will need to re-upload if they want to change the photo
+  };
+
+  const handleRemoveMedication = async (id: string) => {
+    if (!token) return;
+    if (!confirm('Are you sure you want to delete this medication?')) return;
+
+    try {
+      await fetchJson(
+        `/medications/${id}?userId=${API_USER_ID}`,
+        { method: 'DELETE' },
+        token || undefined
+      );
+
+      setMedications(prev => prev.filter(item => item.id !== id));
+
+      // Trigger device sync (fire-and-forget, 500ms delay for DynamoDB consistency)
+      setTimeout(() => {
+        syncMedicationsToDevice();
+      }, 500);
+    } catch (e) {
+      console.error('Failed to delete medication:', e);
+      setMedicationsError(e instanceof Error ? e.message : 'Failed to delete medication');
+    }
   };
 
   const handleAddFamilyMember = async (event: React.FormEvent) => {
@@ -420,83 +665,268 @@ export default function ProfilePage() {
     </div>
   );
 
-  const renderVoiceTab = () => (
-    <div className="space-y-6">
-      <div className="rounded-3xl border border-purple-400/30 bg-gradient-to-br from-purple-500/20 to-indigo-500/10 backdrop-blur-2xl shadow-2xl shadow-purple-500/20 p-6">
-        <h2 className="text-xl font-semibold text-white mb-4">Upload voice clip</h2>
-        <form onSubmit={handleAddVoiceRecording} className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
-        <div className="space-y-3">
+  const renderMedicationsTab = () => {
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    
+    const getFrequencyText = (med: Medication) => {
+      switch (med.frequency) {
+        case 'daily':
+          return 'Daily';
+        case 'weekly':
+          if (med.frequencyDetails && med.frequencyDetails.length > 0) {
+            return `Weekly (${med.frequencyDetails.map(d => dayNames[d]).join(', ')})`;
+          }
+          return 'Weekly';
+        case 'monthly':
+          return 'Monthly';
+        case 'as-needed':
+          return 'As needed';
+        default:
+          return med.frequency;
+      }
+    };
+
+    const formatTime = (time: string) => {
+      try {
+        const [hours, minutes] = time.split(':');
+        const h = parseInt(hours);
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const h12 = h % 12 || 12;
+        return `${h12}:${minutes} ${ampm}`;
+      } catch {
+        return time;
+      }
+    };
+
+    return (
+      <div className="space-y-6">
+        {/* Error Message */}
+        {medicationsError && (
+          <div className="p-4 rounded-2xl bg-red-500/20 border border-red-400/30 text-red-200">
+            <p className="text-sm font-medium">{medicationsError}</p>
+          </div>
+        )}
+
+        {/* Add/Edit Medication Form */}
+        <div className="rounded-3xl border border-purple-400/30 bg-gradient-to-br from-purple-500/20 to-indigo-500/10 backdrop-blur-2xl shadow-2xl shadow-purple-500/20 p-6">
+          <h2 className="text-xl font-semibold text-white mb-4">
+            {editingMedId ? 'Edit Medication' : 'Add Medication'}
+          </h2>
+          <form onSubmit={handleAddMedication} className="space-y-4">
+            {/* Photo Upload */}
             <div>
-              <label className="block text-sm font-medium text-white mb-1">Label</label>
-              <input
-                type="text"
-                value={voiceLabel}
-                onChange={(e) => setVoiceLabel(e.target.value)}
-                placeholder="e.g. Drink water reminder"
-                className="w-full border border-purple-400/30 rounded-xl px-3 py-2.5 bg-white/10 backdrop-blur-xl text-white placeholder-purple-300 focus:outline-none focus:ring-4 focus:ring-purple-500/30 focus:border-purple-400"
-                required
-              />
-            </div>
-              <div>
-              <label className="block text-sm font-medium text-white mb-1">Choose audio file</label>
-              <div className="flex items-center gap-3">
-                <label className="inline-flex items-center gap-2 px-3 py-2.5 border border-dashed border-purple-400/30 rounded-xl cursor-pointer text-white hover:border-cyan-400 hover:text-cyan-300 hover:bg-white/10 transition-all duration-300">
-                  <Upload size={18} />
-                  <span>{voiceFile ? voiceFile.name : 'Select file (.mp3, .wav)'}</span>
-                  <input
-                    ref={voiceInputRef}
-                    type="file"
-                    accept="audio/*"
-                    className="hidden"
-                    onChange={(e) => setVoiceFile(e.target.files?.[0] ?? null)}
+              <label className="block text-sm font-medium text-white mb-2">Medication Photo (Optional)</label>
+              <label className="inline-flex items-center gap-2 px-3 py-2.5 border border-dashed border-purple-400/30 rounded-xl cursor-pointer text-white hover:border-cyan-400 hover:text-cyan-300 hover:bg-white/10 transition-all duration-300">
+                <Camera size={18} />
+                <span>{medFile ? medFile.name : 'Select image'}</span>
+                <input
+                  ref={medInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => setMedFile(e.target.files?.[0] ?? null)}
+                />
+              </label>
+              {medFile && (
+                <div className="mt-2">
+                  <img 
+                    src={URL.createObjectURL(medFile)} 
+                    alt="Preview" 
+                    className="w-24 h-24 object-cover rounded-xl border border-purple-400/30"
                   />
-                </label>
+                </div>
+              )}
+            </div>
+
+            {/* Medication Name & Time */}
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-white mb-1">Medication Name</label>
+                <input
+                  type="text"
+                  value={medName}
+                  onChange={(e) => setMedName(e.target.value)}
+                  placeholder="e.g. Aspirin 100mg"
+                  className="w-full border border-purple-400/30 rounded-xl px-3 py-2.5 bg-white/10 backdrop-blur-xl text-white placeholder-purple-300 focus:outline-none focus:ring-4 focus:ring-purple-500/30 focus:border-purple-400"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-white mb-1">Time</label>
+                <input
+                  type="time"
+                  value={medTime}
+                  onChange={(e) => setMedTime(e.target.value)}
+                  className="w-full border border-purple-400/30 rounded-xl px-3 py-2.5 bg-white/10 backdrop-blur-xl text-white focus:outline-none focus:ring-4 focus:ring-purple-500/30 focus:border-purple-400 [color-scheme:dark]"
+                  required
+                />
               </div>
             </div>
-        </div>
-          <button
-            type="submit"
-            className="md:self-end inline-flex items-center justify-center h-12 px-4 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-medium hover:shadow-lg hover:shadow-cyan-500/40 hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-            disabled={!voiceLabel.trim() || !voiceFile}
-          >
-            Add recording
-          </button>
-        </form>
-      </div>
 
-      <div className="rounded-3xl border border-purple-400/30 bg-gradient-to-br from-purple-500/20 to-indigo-500/10 backdrop-blur-2xl shadow-2xl shadow-purple-500/20 p-6">
-        <div className="mb-4">
-          <h3 className="font-semibold text-white text-xl">Your voice clips</h3>
-        </div>
-        {voiceRecordings.length === 0 ? (
-          <div className="p-6 text-center text-purple-200">
-            <p>No voice recordings yet. Upload one to get started.</p>
-          </div>
-        ) : (
-          <ul className="divide-y divide-purple-400/20">
-            {voiceRecordings.map(item => (
-              <li key={item.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-6 py-4">
-                <div className="min-w-0">
-                  <p className="font-medium text-white truncate">{item.label}</p>
-                  <p className="text-sm text-purple-200 truncate">{item.filename}</p>
-                  <p className="text-xs text-purple-300 mt-1">
-                    Uploaded {new Date(item.addedAt).toLocaleString()} • {(item.size / 1024).toFixed(0)} KB
-                  </p>
+            {/* Frequency */}
+            <div>
+              <label className="block text-sm font-medium text-white mb-1">Frequency</label>
+              <select
+                value={medFrequency}
+                onChange={(e) => {
+                  setMedFrequency(e.target.value as FrequencyType);
+                  if (e.target.value !== 'weekly') {
+                    setMedFrequencyDetails([]);
+                  }
+                }}
+                className="w-full border border-purple-400/30 rounded-xl px-3 py-2.5 bg-white/10 backdrop-blur-xl text-white focus:outline-none focus:ring-4 focus:ring-purple-500/30 focus:border-purple-400"
+              >
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+                <option value="as-needed">As needed</option>
+              </select>
+            </div>
+
+            {/* Weekly Day Selector */}
+            {medFrequency === 'weekly' && (
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">Select Days</label>
+                <div className="flex flex-wrap gap-2">
+                  {dayNames.map((day, index) => (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => toggleMedDay(index)}
+                      className={`px-4 py-2 rounded-xl font-medium transition-all duration-300 ${
+                        medFrequencyDetails.includes(index)
+                          ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-500/40'
+                          : 'bg-white/10 text-purple-200 border border-purple-400/30 hover:bg-white/20'
+                      }`}
+                    >
+                      {day}
+                    </button>
+                  ))}
                 </div>
+              </div>
+            )}
+
+            {/* Notes */}
+            <div>
+              <label className="block text-sm font-medium text-white mb-1">Notes (Optional)</label>
+              <textarea
+                value={medNotes}
+                onChange={(e) => setMedNotes(e.target.value)}
+                placeholder="e.g. Take with food"
+                rows={2}
+                className="w-full border border-purple-400/30 rounded-xl px-3 py-2.5 bg-white/10 backdrop-blur-xl text-white placeholder-purple-300 focus:outline-none focus:ring-4 focus:ring-purple-500/30 focus:border-purple-400"
+              />
+            </div>
+
+            {/* Submit Buttons */}
+            <div className="flex gap-2 justify-end">
+              {editingMedId && (
                 <button
-                  onClick={() => handleRemoveVoiceRecording(item.id)}
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-red-400/30 bg-red-500/10 backdrop-blur-xl text-white hover:bg-red-500/20 hover:border-red-400 hover:scale-105 transition-all duration-300"
+                  type="button"
+                  onClick={resetMedicationForm}
+                  className="px-4 py-2 rounded-xl bg-white/10 text-white font-medium hover:bg-white/20 transition-all duration-300"
                 >
-                  <Trash2 size={16} />
-                  Remove
+                  Cancel
                 </button>
-              </li>
-            ))}
-          </ul>
-        )}
+              )}
+              <button
+                type="submit"
+                disabled={isSubmittingMed}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-medium hover:shadow-lg hover:shadow-cyan-500/40 hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+              >
+                {isSubmittingMed ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>{editingMedId ? 'Updating...' : 'Adding...'}</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus size={16} />
+                    <span>{editingMedId ? 'Update Medication' : 'Add Medication'}</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* Medications List */}
+        <div className="rounded-3xl border border-purple-400/30 bg-gradient-to-br from-purple-500/20 to-indigo-500/10 backdrop-blur-2xl shadow-2xl shadow-purple-500/20 p-6">
+          <div className="mb-4">
+            <h3 className="font-semibold text-white text-xl">Your Medications</h3>
+          </div>
+          {medicationsLoading ? (
+            <div className="p-6 text-center text-purple-200">
+              <div className="w-12 h-12 mx-auto mb-3 border-4 border-purple-300 border-t-transparent rounded-full animate-spin"></div>
+              <p>Loading medications...</p>
+            </div>
+          ) : medications.length === 0 ? (
+            <div className="p-6 text-center text-purple-200">
+              <Pill className="w-12 h-12 mx-auto mb-3 text-purple-300" />
+              <p>No medications added yet.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {medications.map(med => (
+                <div
+                  key={med.id}
+                  className="flex gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-purple-400/20 hover:border-purple-400/40 transition-all duration-300"
+                >
+                  {/* Photo */}
+                  <div className="flex-shrink-0">
+                    {med.photoUrl ? (
+                      <img
+                        src={med.photoUrl}
+                        alt={med.name}
+                        className="w-20 h-20 object-cover rounded-xl border border-purple-400/30"
+                      />
+                    ) : (
+                      <div className="w-20 h-20 rounded-xl bg-purple-500/20 border border-purple-400/30 flex items-center justify-center">
+                        <Pill className="w-8 h-8 text-purple-300" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-semibold text-white text-lg truncate">{med.name}</h4>
+                    <div className="flex items-center gap-2 mt-1 text-sm text-purple-200">
+                      <Clock size={14} />
+                      <span>{getFrequencyText(med)} at {formatTime(med.time)}</span>
+                    </div>
+                    {med.notes && (
+                      <p className="text-sm text-purple-300 mt-1">{med.notes}</p>
+                    )}
+                    <p className="text-xs text-purple-400 mt-2">
+                      Added {new Date(med.addedAt).toLocaleDateString()}
+                    </p>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex flex-col gap-2">
+                    <button
+                      onClick={() => handleEditMedication(med)}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-200 border border-blue-400/30 hover:bg-blue-500/30 hover:scale-105 transition-all duration-300 text-sm"
+                    >
+                      <Edit2 size={14} />
+                      <span>Edit</span>
+                    </button>
+                    <button
+                      onClick={() => handleRemoveMedication(med.id)}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-500/20 text-red-200 border border-red-400/30 hover:bg-red-500/30 hover:scale-105 transition-all duration-300 text-sm"
+                    >
+                      <Trash2 size={14} />
+                      <span>Remove</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderFamilyTab = () => (
     <div className="space-y-6">
@@ -746,7 +1176,7 @@ export default function ProfilePage() {
         </div>
 
         {activeTab === 'profile' && renderProfileTab()}
-        {activeTab === 'voice' && renderVoiceTab()}
+        {activeTab === 'medications' && renderMedicationsTab()}
         {activeTab === 'family' && renderFamilyTab()}
         {activeTab === 'contacts' && renderContactsTab()}
       </div>

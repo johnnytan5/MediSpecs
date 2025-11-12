@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, Info, Video, X, Loader2, Glasses, Clock, MapPin, Phone, Eye, CheckCircle, Clock } from 'lucide-react';
+import { AlertTriangle, Info, Video, X, Loader2, Glasses, Clock, MapPin, Phone, Eye, CheckCircle, Wifi, WifiOff } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { fetchJson } from '@/lib/api';
 
