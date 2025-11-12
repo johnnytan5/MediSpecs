@@ -16,7 +16,7 @@ type AuthState = {
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
 
-const STORAGE_KEY = 'medispecs.auth';
+const STORAGE_KEY = 'remindar.auth';
 
 function loadStored() {
   if (typeof window === 'undefined') return null;

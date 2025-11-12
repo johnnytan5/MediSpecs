@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { fetchJson } from '@/lib/api';
+import { MapPin, Clock, Download, Radio } from 'lucide-react';
 
 type LatLng = { lat: number; lng: number; timestamp?: string };
 
@@ -68,21 +69,58 @@ function formatDateForAPI(date: Date): string {
 export default function LocationPage() {
   const { token } = useAuth();
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY as string | undefined;
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<google.maps.Map | null>(null);
-  const polylineRef = useRef<google.maps.Polyline | null>(null);
-  const markerRef = useRef<google.maps.Marker | null>(null);
+  const liveMapRef = useRef<HTMLDivElement | null>(null);
+  const historyMapRef = useRef<HTMLDivElement | null>(null);
+  const liveMapInstanceRef = useRef<google.maps.Map | null>(null);
+  const historyMapInstanceRef = useRef<google.maps.Map | null>(null);
+  const livePolylineRef = useRef<google.maps.Polyline | null>(null);
+  const historyPolylineRef = useRef<google.maps.Polyline | null>(null);
+  const liveMarkerRef = useRef<google.maps.Marker | null>(null);
+  const historyMarkerRef = useRef<google.maps.Marker | null>(null);
+  const [activeView, setActiveView] = useState<'live' | 'history'>('live');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [points, setPoints] = useState<LatLng[]>([]);
+  const [livePoints, setLivePoints] = useState<LatLng[]>([]);
+  const [historyPoints, setHistoryPoints] = useState<LatLng[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     const today = new Date();
     return today.toISOString().split('T')[0]; // YYYY-MM-DD format
   });
   const deviceId = 'd_123'; // Hardcoded for now
 
+  // Fetch live location (today's data)
   useEffect(() => {
-    async function fetchLocations() {
+    async function fetchLiveLocation() {
+      if (!token || !deviceId) return;
+      try {
+        const today = new Date();
+        const dateStr = formatDateForAPI(today);
+        const data = await fetchJson<ApiLocation[]>(
+          `/locations?deviceId=${deviceId}&date=${dateStr}`,
+          { method: 'GET' },
+          token || undefined
+        );
+        const valid = Array.isArray(data) ? data.filter(p => typeof p.lat === 'number' && typeof p.lng === 'number') : [];
+        if (valid.length > 0) {
+          setLivePoints(valid);
+        } else {
+          // Fallback demo: circle path in University of Malaya
+          const umCenter = { lat: 3.1199, lng: 101.6544 };
+          const circle = generateCirclePoints(umCenter, 300, 90);
+          setLivePoints(circle);
+        }
+      } catch (e) {
+        const umCenter = { lat: 3.1199, lng: 101.6544 };
+        const circle = generateCirclePoints(umCenter, 300, 90);
+        setLivePoints(circle);
+      }
+    }
+    fetchLiveLocation();
+  }, [token, deviceId]);
+
+  // Fetch history location (selected date)
+  useEffect(() => {
+    async function fetchHistoryLocation() {
       if (!token || !deviceId) return;
       try {
         setLoading(true);
@@ -95,121 +133,264 @@ export default function LocationPage() {
         );
         const valid = Array.isArray(data) ? data.filter(p => typeof p.lat === 'number' && typeof p.lng === 'number') : [];
         if (valid.length > 0) {
-          setPoints(valid);
+          setHistoryPoints(valid);
         } else {
           // Fallback demo: circle path in University of Malaya
           const umCenter = { lat: 3.1199, lng: 101.6544 };
           const circle = generateCirclePoints(umCenter, 300, 90);
-          setPoints(circle);
+          setHistoryPoints(circle);
         }
       } catch (e) {
-        // On error, show demo circle
         const umCenter = { lat: 3.1199, lng: 101.6544 };
         const circle = generateCirclePoints(umCenter, 300, 90);
-        setPoints(circle);
+        setHistoryPoints(circle);
         setError(e instanceof Error ? e.message : 'Unable to load locations');
       } finally {
         setLoading(false);
       }
     }
-    fetchLocations();
+    fetchHistoryLocation();
   }, [selectedDate, token, deviceId]);
 
+  // Render Live Map
   useEffect(() => {
-    // Don't render map while loading
-    if (loading) return;
-
-    async function render() {
-      if (!apiKey) return;
-      if (!containerRef.current) return;
+    async function renderLiveMap() {
+      if (!apiKey || !liveMapRef.current || livePoints.length === 0) return;
       const g = await loadGoogleMaps(apiKey);
 
-      // Initialize map once
-      if (!mapRef.current) {
-        mapRef.current = new g.maps.Map(containerRef.current, {
+      if (!liveMapInstanceRef.current) {
+        liveMapInstanceRef.current = new g.maps.Map(liveMapRef.current, {
           mapTypeId: g.maps.MapTypeId.ROADMAP,
           streetViewControl: false,
           mapTypeControl: false,
           fullscreenControl: false,
-        });
+        } as google.maps.MapOptions);
       }
 
-      const map = mapRef.current!;
+      const map = liveMapInstanceRef.current!;
 
       // Clear existing overlays
-      if (polylineRef.current) polylineRef.current.setMap(null);
-      if (markerRef.current) markerRef.current.setMap(null);
+      if (livePolylineRef.current) livePolylineRef.current.setMap(null);
+      if (liveMarkerRef.current) liveMarkerRef.current.setMap(null);
 
-      if (!points || points.length === 0) {
-        // Default center (Singapore) if no data
-        map.setCenter({ lat: 1.3521, lng: 103.8198 });
-        map.setZoom(11);
-        return;
-      }
-
-      // Draw polyline
-      polylineRef.current = new g.maps.Polyline({
-        path: points.map(p => ({ lat: p.lat, lng: p.lng })),
+      // Draw polyline with gradient effect
+      livePolylineRef.current = new g.maps.Polyline({
+        path: livePoints.map((p: LatLng) => ({ lat: p.lat, lng: p.lng })),
         geodesic: true,
-        strokeColor: '#2563eb',
-        strokeOpacity: 0.9,
-        strokeWeight: 3,
+        strokeColor: '#06b6d4',
+        strokeOpacity: 0.8,
+        strokeWeight: 4,
       });
-      polylineRef.current.setMap(map);
+      livePolylineRef.current.setMap(map);
 
-      // Latest point marker
-      const latest = points[points.length - 1];
-      markerRef.current = new g.maps.Marker({
+      // Latest point marker with pulsing effect
+      const latest = livePoints[livePoints.length - 1];
+      liveMarkerRef.current = new g.maps.Marker({
         position: latest,
         map,
-        title: 'Latest location',
-      });
+        title: 'Current location',
+      } as google.maps.MarkerOptions);
 
-      // Fit bounds to all points
+      // Fit bounds
       const bounds = new g.maps.LatLngBounds();
-      points.forEach(p => bounds.extend(new g.maps.LatLng(p.lat, p.lng)));
+      livePoints.forEach((p: LatLng) => bounds.extend(new g.maps.LatLng(p.lat, p.lng)));
       map.fitBounds(bounds);
     }
-    render();
-  }, [apiKey, points, loading]);
+    renderLiveMap();
+  }, [apiKey, livePoints]);
+
+  // Render History Map
+  useEffect(() => {
+    async function renderHistoryMap() {
+      if (!apiKey || !historyMapRef.current || historyPoints.length === 0) return;
+      const g = await loadGoogleMaps(apiKey);
+
+      if (!historyMapInstanceRef.current) {
+        historyMapInstanceRef.current = new g.maps.Map(historyMapRef.current, {
+          mapTypeId: g.maps.MapTypeId.ROADMAP,
+          streetViewControl: false,
+          mapTypeControl: false,
+          fullscreenControl: false,
+        } as google.maps.MapOptions);
+      }
+
+      const map = historyMapInstanceRef.current!;
+
+      // Clear existing overlays
+      if (historyPolylineRef.current) historyPolylineRef.current.setMap(null);
+      if (historyMarkerRef.current) historyMarkerRef.current.setMap(null);
+
+      // Draw polyline with gradient effect
+      historyPolylineRef.current = new g.maps.Polyline({
+        path: historyPoints.map((p: LatLng) => ({ lat: p.lat, lng: p.lng })),
+        geodesic: true,
+        strokeColor: '#8b5cf6',
+        strokeOpacity: 0.7,
+        strokeWeight: 4,
+      });
+      historyPolylineRef.current.setMap(map);
+
+      // End point marker
+      const latest = historyPoints[historyPoints.length - 1];
+      historyMarkerRef.current = new g.maps.Marker({
+        position: latest,
+        map,
+        title: 'End location',
+      } as google.maps.MarkerOptions);
+
+      // Fit bounds
+      const bounds = new g.maps.LatLngBounds();
+      historyPoints.forEach((p: LatLng) => bounds.extend(new g.maps.LatLng(p.lat, p.lng)));
+      map.fitBounds(bounds);
+    }
+    renderHistoryMap();
+  }, [apiKey, historyPoints, loading]);
 
   return (
-    <div className="pb-6">
-      <div className="mb-4">
-        <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Location</h1>
-        <p className="text-sm text-gray-500 mt-1">View movement path by selecting a date.</p>
+    <div className="pb-20 min-h-screen">
+      {/* Header */}
+      <div className="relative z-10 pt-4 pb-6 px-4">
+        <h1 className="text-2xl font-semibold tracking-tight text-white text-center">Location</h1>
       </div>
 
-      {/* Date selector - more prominent */}
-      <div className="mb-4 p-4 bg-white border border-gray-200 rounded-xl shadow-sm">
-        <label className="block text-sm font-semibold mb-2 text-gray-900">Select Date</label>
-        <input
-          type="date"
-          value={selectedDate}
-          onChange={(e) => setSelectedDate(e.target.value)}
-          className="w-full sm:w-auto min-w-[200px] border-2 border-gray-300 rounded-xl px-4 py-3 bg-white text-gray-900 text-base font-medium focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-600 transition shadow-sm"
-        />
+      {/* Tab Switcher */}
+      <div className="px-4 mb-6">
+        <div className="bg-gradient-to-br from-purple-500/20 to-indigo-500/10 backdrop-blur-2xl rounded-[20px] p-2 shadow-xl border border-purple-400/30 inline-flex gap-2">
+          <button
+            onClick={() => setActiveView('live')}
+            className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-medium transition-all duration-300 ${
+              activeView === 'live'
+                ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-500/40 scale-105'
+                : 'text-white hover:bg-white/10 hover:scale-102'
+            }`}
+          >
+            <Radio className={`w-5 h-5 ${activeView === 'live' ? 'animate-pulse' : ''}`} />
+            <span>Live</span>
+          </button>
+          <button
+            onClick={() => setActiveView('history')}
+            className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-medium transition-all duration-300 ${
+              activeView === 'history'
+                ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-500/40 scale-105'
+                : 'text-white hover:bg-white/10 hover:scale-102'
+            }`}
+          >
+            <Clock className="w-5 h-5" />
+            <span>History</span>
+          </button>
+        </div>
       </div>
 
       {error && (
-        <div className="mb-4 p-3 rounded-lg border border-red-200 bg-red-50 text-red-700 text-sm">
+        <div className="mx-4 mb-4 p-4 rounded-3xl border border-red-400/30 bg-gradient-to-br from-red-500/20 to-rose-500/10 backdrop-blur-2xl text-white text-sm shadow-xl shadow-red-500/20">
           {error}
         </div>
       )}
 
-      <div ref={containerRef} className="w-full h-[60vh] rounded-2xl border border-gray-200 bg-white overflow-hidden relative">
-        {loading && (
-          <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center z-10">
-            <div className="text-center">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-600 border-t-transparent mb-2"></div>
-              <p className="text-sm text-gray-700 font-medium">Loading locations…</p>
+      {/* Live Location Panel */}
+      {activeView === 'live' && (
+        <div className="px-4 animate-fadeIn">
+          <div className="rounded-[24px] border border-cyan-400/30 bg-gradient-to-br from-cyan-500/20 to-blue-500/10 backdrop-blur-2xl p-6 shadow-2xl shadow-cyan-500/20 relative overflow-hidden">
+            {/* Decorative gradient overlay */}
+            <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 rounded-full blur-3xl -z-0" />
+            
+            {/* Card Header */}
+            <div className="flex items-center justify-between mb-4 relative z-10">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-600 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/30 relative">
+                  <MapPin className="w-6 h-6 text-white" strokeWidth={2.5} />
+                  {/* Radar pulse animation */}
+                  <div className="absolute inset-0 rounded-2xl bg-cyan-500/30 animate-ping" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-white">📍 Live Location</h2>
+                  <p className="text-xs text-cyan-200">Real-time position tracking</p>
+                </div>
+              </div>
+              <button className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-sm font-medium hover:shadow-lg hover:shadow-cyan-500/40 hover:scale-105 active:scale-95 transition-all duration-200">
+                Track
+              </button>
+            </div>
+
+            {/* Map Container */}
+            <div className="relative rounded-[20px] overflow-hidden shadow-xl border border-cyan-400/30">
+              <div ref={liveMapRef} className="w-full h-[50vh]" />
+              {/* Overlay info */}
+              <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end">
+                <div className="bg-cyan-900/90 backdrop-blur-md rounded-2xl px-4 py-2 shadow-lg border border-cyan-400/30">
+                  <p className="text-xs text-cyan-200">Last updated</p>
+                  <p className="text-sm font-semibold text-white">{new Date().toLocaleTimeString()}</p>
+                </div>
+              </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Location History Panel */}
+      {activeView === 'history' && (
+        <div className="px-4 animate-fadeIn">
+          <div className="rounded-[24px] border border-purple-400/30 bg-gradient-to-br from-purple-500/20 to-blue-500/10 backdrop-blur-2xl p-6 shadow-2xl shadow-purple-500/20 relative overflow-hidden">
+            {/* Decorative gradient overlay */}
+            <div className="absolute top-0 left-0 w-64 h-64 bg-gradient-to-br from-purple-500/10 to-blue-500/10 rounded-full blur-3xl -z-0" />
+            
+            {/* Card Header */}
+            <div className="flex items-center justify-between mb-4 relative z-10">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center shadow-lg shadow-purple-500/30">
+                  <Clock className="w-6 h-6 text-white" strokeWidth={2.5} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-white">🕓 Location History</h2>
+                  <p className="text-xs text-purple-200">Past routes and movements</p>
+                </div>
+              </div>
+              <button className="px-4 py-2 rounded-xl bg-white/10 backdrop-blur-sm border border-purple-400/30 text-white text-sm font-medium hover:bg-white/20 hover:shadow-lg hover:scale-105 active:scale-95 transition-all duration-200 flex items-center gap-2">
+                <Download className="w-4 h-4" />
+                Export
+              </button>
+            </div>
+
+            {/* Date Picker */}
+            <div className="mb-4 relative z-10">
+              <label className="block text-sm font-semibold mb-2 text-white">Select Date</label>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="w-full sm:w-auto min-w-[240px] border border-purple-400/30 rounded-2xl px-4 py-3 bg-white/10 backdrop-blur-xl text-white text-base font-medium focus:outline-none focus:ring-4 focus:ring-purple-500/30 focus:border-purple-400 focus:shadow-lg transition-all duration-300"
+              />
+            </div>
+
+            {/* Map Container */}
+            <div className="relative rounded-[20px] overflow-hidden shadow-xl border border-purple-400/30">
+              <div ref={historyMapRef} className="w-full h-[50vh]" />
+              {loading && (
+                <div className="absolute inset-0 bg-purple-900/80 backdrop-blur-md flex items-center justify-center z-10">
+                  <div className="text-center">
+                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-purple-400 border-t-transparent mb-3"></div>
+                    <p className="text-sm text-white font-medium">Loading location history…</p>
+                  </div>
+                </div>
+              )}
+              {/* Overlay info */}
+              <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end gap-2">
+                <div className="bg-purple-900/90 backdrop-blur-md rounded-2xl px-4 py-2 shadow-lg border border-purple-400/30">
+                  <p className="text-xs text-purple-200">Total distance</p>
+                  <p className="text-sm font-semibold text-white">~{(historyPoints.length * 0.05).toFixed(1)} km</p>
+                </div>
+                <div className="bg-purple-900/90 backdrop-blur-md rounded-2xl px-4 py-2 shadow-lg border border-purple-400/30">
+                  <p className="text-xs text-purple-200">Data points</p>
+                  <p className="text-sm font-semibold text-white">{historyPoints.length}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {!apiKey && (
-        <div className="mt-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+        <div className="mx-4 mt-4 text-sm text-white bg-gradient-to-br from-amber-500/20 to-orange-500/10 backdrop-blur-2xl border border-amber-400/30 rounded-3xl p-4 shadow-xl shadow-amber-500/20">
           Missing NEXT_PUBLIC_GOOGLE_MAPS_API_KEY.
         </div>
       )}

@@ -1,7 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { AlertTriangle, Info, Wifi, WifiOff, Video, X, Loader2, Phone, Eye, CheckCircle, Clock } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { AlertTriangle, Info, Video, X, Loader2, Glasses, Clock, MapPin, Phone, Eye, CheckCircle, Clock } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { fetchJson } from '@/lib/api';
 
 interface StreamStatus {
   status: 'available' | 'unavailable';
@@ -215,7 +218,18 @@ function FallEmergencyAlert({
   );
 }
 
+interface ApiReminder {
+  reminderId?: string;
+  SK?: string;
+  title: string;
+  timeOfDay?: string;
+  scheduleType: 'daily' | 'weekly';
+  daysOfWeek?: number[];
+}
+
 export default function HomePage() {
+  const router = useRouter();
+  const { token } = useAuth();
   const [isConnected, setIsConnected] = useState(false);
   const [showLiveFeed, setShowLiveFeed] = useState(false);
   const [streamStatus, setStreamStatus] = useState<StreamStatus | null>(null);
@@ -228,8 +242,45 @@ export default function HomePage() {
   const [alertedFalls, setAlertedFalls] = useState<Set<string>>(new Set());
   const [emergencyAlertShown, setEmergencyAlertShown] = useState(false);
   const [dismissedFalls, setDismissedFalls] = useState<Set<string>>(new Set());
+  const [nextReminder, setNextReminder] = useState<{ title: string; time: string } | null>(null);
   
   const streamBaseUrl = process.env.NEXT_PUBLIC_STREAM_BASE_URL || '';
+
+  // Navigation
+  const handleNavigateToLocation = () => {
+    router.push('/location');
+  };
+
+  // Fetch next reminder
+  useEffect(() => {
+    if (!token) return;
+    
+    async function loadNextReminder() {
+      try {
+        const userId = 'u_123';
+        const data = await fetchJson<ApiReminder[]>(`/reminders?userId=${userId}`, { method: 'GET' }, token || undefined);
+        
+        if (Array.isArray(data) && data.length > 0) {
+          // Sort by time to get the next one
+          const sorted = [...data].sort((a, b) => 
+            (a.timeOfDay || '').localeCompare(b.timeOfDay || '')
+          );
+          
+          const next = sorted[0];
+          if (next) {
+            setNextReminder({
+              title: next.title,
+              time: next.timeOfDay || '—'
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load reminders:', error);
+      }
+    }
+    
+    loadNextReminder();
+  }, [token]);
 
   // Check stream status
   const checkStreamStatus = async () => {
@@ -366,69 +417,64 @@ export default function HomePage() {
 
   return (
     <div className="pb-8">
-      <div className="mb-5">
-        <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Home</h1>
-        <p className="text-sm text-gray-500 mt-1">Quick overview at a glance.</p>
+      <div className="relative z-10 pt-4 pb-6 px-4">
+        <h1 className="text-2xl font-semibold tracking-tight text-white text-center">Home</h1>
       </div>
 
       {/* Connection Status Section */}
       <section className="mb-6">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold text-gray-900">Device Connection</h2>
+          <h2 className="text-lg font-semibold text-white">Devices</h2>
         </div>
-        <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm">
-          <div className="p-5">
+        <div className="rounded-3xl border border-purple-400/30 bg-gradient-to-br from-purple-500/20 to-indigo-500/10 backdrop-blur-2xl overflow-hidden shadow-2xl shadow-purple-500/20">
+          <div className="p-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className={`flex items-center justify-center w-12 h-12 rounded-full ${
+                <div className={`flex items-center justify-center w-14 h-14 rounded-2xl backdrop-blur-xl shadow-lg ${
                   isCheckingStatus 
-                    ? 'bg-gray-100' 
+                    ? 'bg-gray-500/30' 
                     : isConnected 
-                      ? 'bg-green-100' 
-                      : 'bg-gray-100'
+                      ? 'bg-gradient-to-br from-green-400/40 to-emerald-400/30' 
+                      : 'bg-gray-500/30'
                 }`}>
                   {isCheckingStatus ? (
-                    <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+                    <Loader2 className="w-7 h-7 text-gray-300 animate-spin" />
                   ) : isConnected ? (
-                    <Wifi className="w-6 h-6 text-green-600" />
+                    <Glasses className="w-7 h-7 text-green-200" />
                   ) : (
-                    <WifiOff className="w-6 h-6 text-gray-400" />
+                    <Glasses className="w-7 h-7 text-gray-300" />
                   )}
                 </div>
                 <div>
-                  <p className="text-base font-semibold text-gray-900">
+                  <p className="text-base font-semibold text-white">
                     {isCheckingStatus 
                       ? 'Checking Connection...' 
                       : isConnected 
                         ? 'Glasses Connected' 
                         : 'Glasses Disconnected'}
                   </p>
-                  <p className="text-sm text-gray-500 mt-0.5">
+                  <p className="text-sm text-purple-200/90 mt-0.5">
                     {isCheckingStatus 
                       ? 'Connecting to device...'
                       : isConnected 
                         ? `Device ID: d_123 • ${streamStatus?.camera_type || 'Camera'} • ${streamStatus?.message || 'Ready'}`
-                        : streamStatus?.message || 'Waiting for connection...'}
+                        : 'Waiting for connection...'}
+                  </p>
+                  <p className="text-xs text-purple-300/70 mt-1">
+                    Device last sync: {isConnected ? 'Just now' : 'Never'}
                   </p>
                 </div>
               </div>
               {isConnected && (
                 <button
                   onClick={() => setShowLiveFeed(true)}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors shadow-sm"
+                  className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-semibold hover:from-cyan-600 hover:to-blue-600 transition-all shadow-lg shadow-cyan-500/30 hover:shadow-cyan-500/50 hover:scale-105"
                 >
                   <Video size={18} />
                   <span>Live Feed</span>
                 </button>
               )}
             </div>
-            {!streamBaseUrl && !isCheckingStatus && (
-              <div className="mt-4 pt-4 border-t border-gray-100">
-                <div className="px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
-                  ⚠️ Stream URL not configured. Set <code className="bg-amber-100 px-1.5 py-0.5 rounded">NEXT_PUBLIC_STREAM_BASE_URL</code> in environment variables.
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </section>
@@ -637,31 +683,54 @@ export default function HomePage() {
       {/* Summary Section */}
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold text-gray-900">Summary</h2>
-          <span className="text-xs text-gray-500">Today</span>
+          <h2 className="text-lg font-semibold text-white">Summary</h2>
+          <span className="text-xs text-purple-300">Today</span>
         </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div className="rounded-2xl border border-gray-200 bg-white p-4">
-            <div className="flex items-center gap-2 text-gray-700 mb-2">
-              <Info className="w-4 h-4" />
-              <span className="text-sm font-medium">Reminders due</span>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {/* Next Reminder Widget - Crystal Glass Style */}
+          <div className="rounded-3xl border border-pink-400/30 bg-gradient-to-br from-pink-500/20 to-red-500/10 backdrop-blur-2xl p-6 relative shadow-2xl shadow-pink-500/20 hover:shadow-pink-500/30 hover:scale-[1.02] transition-all duration-300">
+            <div className="absolute top-5 right-5 w-12 h-12 rounded-2xl bg-gradient-to-br from-pink-400/40 to-red-400/30 backdrop-blur-xl flex items-center justify-center shadow-lg">
+              <Clock className="w-6 h-6 text-pink-200" />
             </div>
-            <p className="text-2xl font-semibold text-gray-900">0</p>
-            <p className="text-xs text-gray-500 mt-1">Next: —</p>
+            <div className="mb-3">
+              <span className="text-sm font-semibold text-pink-200">Next Reminder</span>
+            </div>
+            {nextReminder ? (
+              <>
+                <p className="text-lg font-bold text-white truncate pr-14">{nextReminder.title}</p>
+                <p className="text-sm text-pink-100/90 mt-2">Time: {nextReminder.time}</p>
+              </>
+            ) : (
+              <>
+                <p className="text-base text-white pr-14">No reminders</p>
+                <p className="text-xs text-pink-200/80 mt-2">Create one to get started</p>
+              </>
+            )}
           </div>
-          <div className="rounded-2xl border border-gray-200 bg-white p-4">
-            <div className="flex items-center gap-2 text-gray-700 mb-2">
-              <Info className="w-4 h-4" />
-              <span className="text-sm font-medium">Latest location</span>
+
+          {/* Latest Location Widget - Crystal Glass Style */}
+          <div 
+            className="rounded-3xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/20 to-cyan-500/10 backdrop-blur-2xl p-6 cursor-pointer hover:scale-[1.02] transition-all duration-300 relative shadow-2xl shadow-emerald-500/20 hover:shadow-emerald-500/30"
+            onClick={handleNavigateToLocation}
+          >
+            <div className="absolute top-5 right-5 w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-400/40 to-cyan-400/30 backdrop-blur-xl flex items-center justify-center shadow-lg">
+              <MapPin className="w-6 h-6 text-emerald-200" />
             </div>
-            <p className="text-sm text-gray-900">Open Location tab to view</p>
+            <div className="mb-3">
+              <span className="text-sm font-semibold text-emerald-200">Latest location</span>
+            </div>
+            <p className="text-sm text-white pr-14">Open Location tab to view</p>
           </div>
-          <div className="rounded-2xl border border-gray-200 bg-white p-4">
-            <div className="flex items-center gap-2 text-gray-700 mb-2">
-              <Info className="w-4 h-4" />
-              <span className="text-sm font-medium">Recent videos</span>
+
+          {/* Recent Videos Widget - Crystal Glass Style */}
+          <div className="rounded-3xl border border-violet-400/30 bg-gradient-to-br from-violet-500/20 to-purple-500/10 backdrop-blur-2xl p-6 relative shadow-2xl shadow-violet-500/20 hover:shadow-violet-500/30 hover:scale-[1.02] transition-all duration-300">
+            <div className="absolute top-5 right-5 w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-400/40 to-purple-400/30 backdrop-blur-xl flex items-center justify-center shadow-lg">
+              <Video className="w-6 h-6 text-violet-200" />
             </div>
-            <p className="text-sm text-gray-900">No recent uploads</p>
+            <div className="mb-3">
+              <span className="text-sm font-semibold text-violet-200">Recent videos</span>
+            </div>
+            <p className="text-sm text-white pr-14">No recent uploads</p>
           </div>
         </div>
       </section>

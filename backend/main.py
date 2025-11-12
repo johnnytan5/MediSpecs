@@ -4,8 +4,8 @@ import uvicorn
 
 # Create FastAPI instance
 app = FastAPI(
-    title="MediSpecs API",
-    description="A FastAPI backend for MediSpecs application",
+    title="Remind AR API",
+    description="A FastAPI backend for Remind AR application",
     version="1.0.0"
 )
 
@@ -21,7 +21,7 @@ app.add_middleware(
 # Root endpoint
 @app.get("/")
 async def root():
-    return {"message": "Welcome to MediSpecs API", "status": "running"}
+    return {"message": "Welcome to Remind AR API", "status": "running"}
 
 # Health check endpoint
 @app.get("/health")
@@ -31,7 +31,7 @@ async def health_check():
 # Example API endpoint
 @app.get("/api/version")
 async def get_version():
-    return {"version": "1.0.0", "api": "MediSpecs"}
+    return {"version": "1.0.0", "api": "Remind AR"}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

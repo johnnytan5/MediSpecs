@@ -1,6 +1,6 @@
-# MediSpecs - Medical Companion App
+# Remind AR - Your Daily AI Companion
 
-This is a [Next.js](https://nextjs.org) project for MediSpecs, a medical companion app with food scanning, nutrition tracking, and AI chat assistance.
+This is a [Next.js](https://nextjs.org) project for Remind AR, a daily AI companion app with reminders, family tracking, and cognitive health monitoring.
 
 ## Prerequisites
 
@@ -9,6 +9,7 @@ Before you begin, ensure you have the following installed:
 ### 1. Install Node.js
 
 **Option A: Download from Official Website**
+
 1. Visit [nodejs.org](https://nodejs.org/)
 2. Download the LTS version (recommended)
 3. Run the installer and follow the setup wizard
@@ -21,17 +22,20 @@ Before you begin, ensure you have the following installed:
 **Option B: Using Package Managers**
 
 **On macOS (using Homebrew):**
+
 ```bash
 brew install node
 ```
 
 **On Ubuntu/Debian:**
+
 ```bash
 curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
 sudo apt-get install -y nodejs
 ```
 
 **On Windows (using Chocolatey):**
+
 ```bash
 choco install nodejs
 ```
@@ -39,15 +43,18 @@ choco install nodejs
 ## Getting Started
 
 ### 1. Go into Repo
-cd MediSpecs/frontend
-```
+
+cd RemindAR/frontend
+
+````
 
 ### 2. Install Dependencies
 ```bash
 npm install
-```
+````
 
 This will install all required packages including:
+
 - Next.js 15.5.5
 - React 19.1.0
 - TypeScript
@@ -109,6 +116,7 @@ frontend/
 ### Common Issues
 
 **1. Node.js not found:**
+
 ```bash
 # Check if Node.js is installed
 node --version
@@ -116,6 +124,7 @@ node --version
 ```
 
 **2. npm install fails:**
+
 ```bash
 # Clear npm cache
 npm cache clean --force
@@ -126,6 +135,7 @@ npm install
 ```
 
 **3. Port 3000 already in use:**
+
 ```bash
 # Kill process using port 3000
 npx kill-port 3000

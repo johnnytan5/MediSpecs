@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { fetchJson } from '@/lib/api';
+import { Grid3x3, List, Table } from 'lucide-react';
 
 type VideoItem = {
   id: string;
@@ -69,11 +70,14 @@ function mapApiVideoToVideoItem(api: ApiVideo): VideoItem {
   };
 }
 
+type ViewMode = 'gallery' | 'list' | 'table';
+
 export default function VideosPage() {
   const { token } = useAuth();
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('gallery');
 
   // Filters
   const [selectedDate, setSelectedDate] = useState<string>('');
@@ -155,28 +159,45 @@ export default function VideosPage() {
 
   return (
     <div className="pb-8">
-      <div className="mb-4">
-        <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Videos</h1>
-        <p className="text-sm text-gray-500 mt-1">Filter by date and time to find recordings.</p>
+      <div className="relative z-10 pt-4 pb-6 px-4">
+        <h1 className="text-2xl font-semibold tracking-tight text-white text-center">Videos</h1>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row sm:items-end gap-3 mb-4">
+      {/* Filters - Crystal Glass */}
+      <div className="flex flex-col sm:flex-row sm:items-end gap-3 mb-4 p-4 rounded-3xl border border-purple-400/30 bg-gradient-to-br from-purple-500/20 to-indigo-500/10 backdrop-blur-2xl shadow-xl">
         <div>
-          <label className="block text-sm font-semibold mb-1 text-gray-900">Date</label>
-          <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="w-full border border-gray-300 rounded-xl px-3 py-2.5 bg-white text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-600" />
+          <label className="block text-sm font-semibold mb-1 text-white">Date</label>
+          <input 
+            type="date" 
+            value={selectedDate} 
+            onChange={(e) => setSelectedDate(e.target.value)} 
+            className="w-full border border-purple-400/30 rounded-2xl px-3 py-2.5 bg-white/10 backdrop-blur-xl text-white placeholder:text-purple-300 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400 [color-scheme:dark]" 
+            style={{ colorScheme: 'dark' }}
+          />
         </div>
         <div>
-          <label className="block text-sm font-semibold mb-1 text-gray-900">Time from</label>
-          <input type="time" value={timeFrom} onChange={(e) => setTimeFrom(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-500" />
+          <label className="block text-sm font-semibold mb-1 text-white">Time from</label>
+          <input 
+            type="time" 
+            value={timeFrom} 
+            onChange={(e) => setTimeFrom(e.target.value)} 
+            className="w-full border border-purple-400/30 rounded-2xl px-3 py-2.5 bg-white/10 backdrop-blur-xl text-white focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400 [color-scheme:dark]" 
+            style={{ colorScheme: 'dark' }}
+          />
         </div>
         <div>
-          <label className="block text-sm font-semibold mb-1 text-gray-900">Time to</label>
-          <input type="time" value={timeTo} onChange={(e) => setTimeTo(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-500" />
+          <label className="block text-sm font-semibold mb-1 text-white">Time to</label>
+          <input 
+            type="time" 
+            value={timeTo} 
+            onChange={(e) => setTimeTo(e.target.value)} 
+            className="w-full border border-purple-400/30 rounded-2xl px-3 py-2.5 bg-white/10 backdrop-blur-xl text-white focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400 [color-scheme:dark]" 
+            style={{ colorScheme: 'dark' }}
+          />
         </div>
         <div className="sm:ml-auto">
           <button
-            className="px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50"
+            className="px-4 py-2.5 rounded-2xl border border-purple-400/30 text-white hover:bg-white/10 transition-all"
             onClick={() => { setSelectedDate(''); setTimeFrom(''); setTimeTo(''); }}
           >
             Clear
@@ -184,16 +205,56 @@ export default function VideosPage() {
         </div>
       </div>
 
+      {/* View Mode Switcher */}
+      <div className="mb-4 flex items-center justify-end gap-2 px-2">
+        <span className="text-sm text-purple-200 mr-2">View:</span>
+        <div className="inline-flex rounded-2xl border border-purple-400/30 bg-white/10 backdrop-blur-xl p-1 gap-1">
+          <button
+            onClick={() => setViewMode('gallery')}
+            className={`p-2 rounded-xl transition-all duration-300 ${
+              viewMode === 'gallery'
+                ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-500/30'
+                : 'text-purple-200 hover:text-white hover:bg-white/10'
+            }`}
+            title="Gallery View"
+          >
+            <Grid3x3 className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => setViewMode('list')}
+            className={`p-2 rounded-xl transition-all duration-300 ${
+              viewMode === 'list'
+                ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-500/30'
+                : 'text-purple-200 hover:text-white hover:bg-white/10'
+            }`}
+            title="List View"
+          >
+            <List className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => setViewMode('table')}
+            className={`p-2 rounded-xl transition-all duration-300 ${
+              viewMode === 'table'
+                ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-500/30'
+                : 'text-purple-200 hover:text-white hover:bg-white/10'
+            }`}
+            title="Table View"
+          >
+            <Table className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+
       {error && (
-        <div className="mb-4 p-3 rounded-lg border border-red-200 bg-red-50 text-red-700 text-sm">
+        <div className="mb-4 p-4 rounded-2xl border border-red-400/30 bg-gradient-to-br from-red-500/20 to-red-600/10 backdrop-blur-xl text-red-200 text-sm shadow-lg">
           {error}
         </div>
       )}
 
       {loading ? (
-        <div className="text-sm text-gray-500">Loading videos…</div>
+        <div className="text-sm text-white">Loading videos…</div>
       ) : videos.length === 0 ? (
-        <div className="text-sm text-gray-500">No videos found for the selected range.</div>
+        <div className="text-sm text-white">No videos found for the selected range.</div>
       ) : (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
           <ul className="divide-y divide-gray-200">

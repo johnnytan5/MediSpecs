@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MediSpecs",
-  description: "Your medical companion app",
+  title: "Remind AR",
+  description: "Your daily AI companion",
 };
 
 export default function RootLayout({

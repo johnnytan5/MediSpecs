@@ -24,7 +24,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const topPadding = showNav ? 'pt-16' : '';
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-blue-900">
       {showNav && <BottomNav />}
       <main className={topPadding}>
         <div className="max-w-6xl mx-auto px-4">
