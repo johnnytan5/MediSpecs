@@ -245,7 +245,7 @@ export default function ProfilePage() {
       } else {
         console.warn('Device sync failed:', data.message);
       }
-    } catch (error) {
+    } catch {
       // Silent failure - device might be offline, will auto-sync in 2 hours
       console.log('Device sync skipped (device may be offline)');
     }
@@ -260,23 +260,37 @@ export default function ProfilePage() {
         setMedicationsLoading(true);
         setMedicationsError(null);
         
-        const data = await fetchJson<any[]>(
+        interface ApiMedication {
+          medicationId?: string;
+          id?: string;
+          name: string;
+          photoUrl?: string;
+          photoS3Key?: string;
+          time: string;
+          frequency: string;
+          frequencyDetails?: number[];
+          notes?: string;
+          createdAt?: string;
+          addedAt?: string;
+        }
+
+        const data = await fetchJson<ApiMedication[]>(
           `/medications?userId=${API_USER_ID}`,
           { method: 'GET' },
           token || undefined
         );
         
         // Map API response to frontend format
-        const mapped = data.map((item: any) => ({
-          id: item.medicationId || item.id,
+        const mapped = data.map((item): Medication => ({
+          id: item.medicationId || item.id || `med-${Date.now()}`,
           name: item.name,
-          photoUrl: item.photoUrl || null,
-          photoS3Key: item.photoS3Key || null,
+          photoUrl: item.photoUrl || undefined,
+          photoS3Key: item.photoS3Key || undefined,
           time: item.time,
           frequency: item.frequency as FrequencyType,
           frequencyDetails: item.frequencyDetails || [],
           notes: item.notes || '',
-          addedAt: item.createdAt || item.addedAt,
+          addedAt: item.createdAt || item.addedAt || new Date().toISOString(),
           isLocal: false,
         }));
         
@@ -328,8 +342,8 @@ export default function ProfilePage() {
 
     try {
       // Convert image to base64 if provided
-      let imageBase64 = null;
-      let contentType = null;
+      let imageBase64: string | undefined;
+      let contentType: string | undefined;
       
       if (medFile) {
         const base64Result = await new Promise<string>((resolve, reject) => {
@@ -342,7 +356,18 @@ export default function ProfilePage() {
         contentType = medFile.type || 'image/jpeg';
       }
 
-      const payload: any = {
+      interface MedicationPayload {
+        userId: string;
+        name: string;
+        time: string;
+        frequency: FrequencyType;
+        frequencyDetails?: number[];
+        notes?: string;
+        imageBase64?: string;
+        contentType?: string;
+      }
+
+      const payload: MedicationPayload = {
         userId: API_USER_ID,
         name: medName.trim(),
         time: medTime,
@@ -360,9 +385,21 @@ export default function ProfilePage() {
         payload.contentType = contentType;
       }
 
+      interface ApiMedicationResponse {
+        medicationId: string;
+        name: string;
+        photoUrl?: string;
+        photoS3Key?: string;
+        time: string;
+        frequency: string;
+        frequencyDetails?: number[];
+        notes?: string;
+        createdAt: string;
+      }
+
       if (editingMedId) {
         // Update existing medication
-        const updated = await fetchJson<any>(
+        const updated = await fetchJson<ApiMedicationResponse>(
           `/medications/${editingMedId}`,
           {
             method: 'PUT',
@@ -376,10 +413,10 @@ export default function ProfilePage() {
             ? {
                 id: updated.medicationId || editingMedId,
                 name: updated.name,
-                photoUrl: updated.photoUrl || null,
-                photoS3Key: updated.photoS3Key || null,
+                photoUrl: updated.photoUrl || undefined,
+                photoS3Key: updated.photoS3Key || undefined,
                 time: updated.time,
-                frequency: updated.frequency,
+                frequency: updated.frequency as FrequencyType,
                 frequencyDetails: updated.frequencyDetails || [],
                 notes: updated.notes || '',
                 addedAt: updated.createdAt || med.addedAt,
@@ -389,7 +426,7 @@ export default function ProfilePage() {
         ));
       } else {
         // Create new medication
-        const created = await fetchJson<any>(
+        const created = await fetchJson<ApiMedicationResponse>(
           '/medications',
           {
             method: 'POST',
@@ -401,10 +438,10 @@ export default function ProfilePage() {
         const newMed: Medication = {
           id: created.medicationId,
           name: created.name,
-          photoUrl: created.photoUrl || null,
-          photoS3Key: created.photoS3Key || null,
+          photoUrl: created.photoUrl || undefined,
+          photoS3Key: created.photoS3Key || undefined,
           time: created.time,
-          frequency: created.frequency,
+          frequency: created.frequency as FrequencyType,
           frequencyDetails: created.frequencyDetails || [],
           notes: created.notes || '',
           addedAt: created.createdAt,
