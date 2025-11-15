@@ -107,23 +107,37 @@ export default function CognitivePage() {
     }
   }
 
-  async function deleteItem(id: string) {
+  async function deleteItem(id: string, e?: React.MouseEvent) {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     if (!token) return;
+    
+    // Confirm deletion
+    if (!confirm('Are you sure you want to delete this exercise?')) {
+      return;
+    }
+    
+    const userId = 'u_123';
     try {
       setError(null);
       const authToken = token || undefined;
-      await fetchJson(`/cognitive/${id}`, { method: 'DELETE' }, authToken);
+      // Include userId in query params like GET endpoint
+      await fetchJson(`/cognitive/${id}?userId=${userId}`, { method: 'DELETE' }, authToken);
       setItems(prev => prev.filter(i => i.id !== id));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to delete exercise');
+    } catch (err) {
+      console.error('Delete error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to delete exercise';
+      setError(errorMessage);
     }
   }
 
   return (
     <>
       {/* Header - Outside the dark background */}
-      <div className="relative z-10 pt-4 pb-6 px-4">
-        <h1 className="text-2xl font-semibold tracking-tight text-white text-center">Cognitive Exercises</h1>
+      <div className="relative z-10 pt-3 sm:pt-4 pb-4 sm:pb-6 px-4">
+        <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-white text-center">Cognitive Exercises</h1>
       </div>
 
       {/* Dark futuristic background section - Full width breakout */}
@@ -138,7 +152,7 @@ export default function CognitivePage() {
         </div>
 
         {error && (
-          <div className="mx-4 mb-4 p-3 rounded-2xl border border-red-400/50 bg-red-500/20 backdrop-blur-sm text-red-200 text-sm">
+          <div className="mx-4 mb-4 p-3 rounded-2xl border border-red-400/50 bg-red-500/20 backdrop-blur-sm text-red-200 text-xs sm:text-sm">
             {error}
           </div>
         )}
@@ -160,12 +174,53 @@ export default function CognitivePage() {
                 <Brain className="w-16 h-16 text-white" strokeWidth={1.5} />
               </div>
             </div>
-            <p className="text-lg text-blue-100 mb-2">No exercises yet</p>
-            <p className="text-sm text-blue-300/70">Tap + to create your first question</p>
+            <p className="text-base sm:text-lg text-blue-100 mb-2">No exercises yet</p>
+            <p className="text-xs sm:text-sm text-blue-300/70">Tap + to create your first question</p>
           </div>
         </div>
       ) : (
-        <div className="relative flex items-center justify-center min-h-[70vh] px-4">
+        <>
+        {/* Mobile: List View, Desktop: Orbiting View */}
+        <div className="block md:hidden px-4 pb-24">
+          {/* Mobile List View */}
+          <div className="space-y-3 max-w-2xl mx-auto">
+            {sorted.map((item) => (
+              <div
+                key={item.id}
+                className="relative p-4 rounded-2xl bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl border border-white/20 shadow-xl"
+              >
+                <p className="text-sm text-white font-medium leading-relaxed mb-3">
+                  {item.question}
+                </p>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-blue-300/60">
+                    {new Date(item.createdAt).toLocaleDateString()}
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => openEdit(item)}
+                      className="p-2 rounded-lg bg-blue-500/20 text-blue-300 hover:bg-blue-500/40 hover:text-white transition-all"
+                      aria-label="Edit"
+                    >
+                      <Pencil size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => deleteItem(item.id, e)}
+                      className="p-2 rounded-lg bg-red-500/20 text-red-300 hover:bg-red-500/40 hover:text-white transition-all"
+                      aria-label="Delete"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Desktop: Orbiting View */}
+        <div className="hidden md:flex relative items-center justify-center min-h-[70vh] px-4">
           {/* Central Glowing Brain */}
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="relative">
@@ -245,7 +300,8 @@ export default function CognitivePage() {
                           <Pencil size={14} />
                         </button>
                         <button
-                          onClick={() => deleteItem(item.id)}
+                          type="button"
+                          onClick={(e) => deleteItem(item.id, e)}
                           className="p-1.5 rounded-lg bg-red-500/20 text-red-300 hover:bg-red-500/40 hover:text-white transition-all"
                           aria-label="Delete"
                         >
@@ -259,15 +315,16 @@ export default function CognitivePage() {
             })}
           </div>
         </div>
+        </>
         )}
 
         {/* Floating Action Button */}
         <button
           onClick={openForm}
-          className="fixed bottom-8 right-8 h-14 w-14 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 text-white flex items-center justify-center shadow-2xl shadow-purple-500/50 hover:shadow-purple-500/70 hover:scale-110 focus:outline-none focus:ring-4 focus:ring-purple-400/50 active:scale-95 transition-all duration-300 z-50"
+          className="fixed bottom-6 right-6 sm:bottom-8 sm:right-8 h-12 w-12 sm:h-14 sm:w-14 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 text-white flex items-center justify-center shadow-2xl shadow-purple-500/50 hover:shadow-purple-500/70 hover:scale-110 focus:outline-none focus:ring-4 focus:ring-purple-400/50 active:scale-95 transition-all duration-300 z-50"
           aria-label="Add exercise"
         >
-          <Plus size={24} strokeWidth={2.5} />
+          <Plus size={20} strokeWidth={2.5} className="sm:w-6 sm:h-6" />
         </button>
         
         <style jsx>{`
@@ -293,32 +350,32 @@ export default function CognitivePage() {
           
           {/* Modal Sheet */}
           <div className="fixed inset-x-0 bottom-0 z-50 animate-slideUp">
-            <div className="bg-gradient-to-br from-blue-50/80 via-purple-50/60 to-white rounded-t-[32px] shadow-2xl max-w-2xl mx-auto border-t border-blue-100/50">
+            <div className="bg-gradient-to-br from-blue-50/80 via-purple-50/60 to-white rounded-t-[24px] sm:rounded-t-[32px] shadow-2xl max-w-2xl mx-auto border-t border-blue-100/50">
               {/* Pull bar */}
               <div className="flex justify-center pt-3 pb-2">
                 <div className="w-12 h-1.5 bg-gradient-to-r from-blue-300 to-purple-300 rounded-full opacity-40" />
               </div>
 
               {/* Content */}
-              <div className="px-6 pb-8">
+              <div className="px-4 sm:px-6 pb-6 sm:pb-8">
                 {/* Header with Brain Icon */}
-                <div className="mb-6 flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center shadow-lg shadow-blue-500/30 animate-fadeIn">
-                    <Brain className="w-6 h-6 text-white" strokeWidth={2} />
+                <div className="mb-4 sm:mb-6 flex items-center gap-3">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center shadow-lg shadow-blue-500/30 animate-fadeIn">
+                    <Brain className="w-5 h-5 sm:w-6 sm:h-6 text-white" strokeWidth={2} />
                   </div>
                   <div className="flex-1">
-                    <h2 className="text-xl font-semibold bg-gradient-to-r from-blue-700 to-purple-700 bg-clip-text text-transparent mb-0.5">
+                    <h2 className="text-lg sm:text-xl font-semibold bg-gradient-to-r from-blue-700 to-purple-700 bg-clip-text text-transparent mb-0.5">
                       {editingId ? 'Edit Exercise' : 'New Exercise'}
                     </h2>
-                    <p className="text-sm text-gray-500">Train your mind with engaging questions</p>
+                    <p className="text-xs sm:text-sm text-gray-500">Train your mind with engaging questions</p>
                   </div>
                 </div>
 
-                <form onSubmit={addItem} className="space-y-5">
+                <form onSubmit={addItem} className="space-y-4 sm:space-y-5">
                   <div>
-                    <label className="block text-sm font-medium mb-2 text-gray-700">Question</label>
+                    <label className="block text-xs sm:text-sm font-medium mb-2 text-gray-700">Question</label>
                     <textarea
-                      className="w-full border-2 border-blue-100 rounded-3xl px-5 py-4 bg-white/80 backdrop-blur-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100/50 focus:bg-white focus:shadow-lg focus:shadow-blue-100/50 transition-all duration-300 resize-none"
+                      className="w-full border-2 border-blue-100 rounded-2xl sm:rounded-3xl px-4 sm:px-5 py-3 sm:py-4 text-sm sm:text-base bg-white/80 backdrop-blur-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100/50 focus:bg-white focus:shadow-lg focus:shadow-blue-100/50 transition-all duration-300 resize-none"
                       rows={4}
                       value={question}
                       onChange={(e) => setQuestion(e.target.value)}
@@ -327,17 +384,17 @@ export default function CognitivePage() {
                     />
                   </div>
 
-                  <div className="flex gap-3 pt-2">
+                  <div className="flex gap-2 sm:gap-3 pt-2">
                     <button 
                       type="button" 
-                      className="flex-1 px-5 py-3.5 rounded-2xl border-2 border-gray-200 text-gray-600 font-medium hover:bg-gray-50 hover:border-gray-300 hover:shadow-md active:scale-[0.97] transition-all duration-200"
+                      className="flex-1 px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl border-2 border-gray-200 text-gray-600 text-sm sm:text-base font-medium hover:bg-gray-50 hover:border-gray-300 hover:shadow-md active:scale-[0.97] transition-all duration-200"
                       onClick={() => { setIsOpen(false); setEditingId(null); setQuestion(''); }}
                     >
                       Cancel
                     </button>
                     <button 
                       type="submit" 
-                      className="flex-1 px-5 py-3.5 rounded-2xl bg-gradient-to-r from-blue-500 via-blue-600 to-purple-600 text-white font-medium hover:from-blue-600 hover:via-blue-700 hover:to-purple-700 hover:shadow-xl hover:shadow-blue-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300"
+                      className="flex-1 px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl bg-gradient-to-r from-blue-500 via-blue-600 to-purple-600 text-white text-sm sm:text-base font-medium hover:from-blue-600 hover:via-blue-700 hover:to-purple-700 hover:shadow-xl hover:shadow-blue-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300"
                     >
                       {editingId ? 'Update' : 'Save'}
                     </button>
